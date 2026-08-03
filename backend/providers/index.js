@@ -1,9 +1,13 @@
-// providers/index.js
+import {
+  chatWithGroq,
+  streamWithGroq,
+} from "./groq.js";
 
 import {
-    chatWithGroq,
-    streamWithGroq,
-} from "./groq.js";
+  chatWithOpenAI,
+  streamWithOpenAI,
+} from "./openai.js";
+
 /**
  * Standard request/response
  */
@@ -16,6 +20,13 @@ export async function runProvider({
   switch (provider) {
     case "groq":
       return await chatWithGroq(
+        messages,
+        model,
+        options
+      );
+
+    case "openai":
+      return await chatWithOpenAI(
         messages,
         model,
         options
@@ -40,6 +51,13 @@ export async function streamProvider({
   switch (provider) {
     case "groq":
       return await streamWithGroq(
+        messages,
+        model,
+        options
+      );
+
+    case "openai":
+      return await streamWithOpenAI(
         messages,
         model,
         options

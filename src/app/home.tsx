@@ -82,15 +82,17 @@ export default function Home() {
             </Text>
           </View>
 
-          <Text style={styles.greeting}>
-            What will we create{"\n"}today?
-          </Text>
+         <Text style={styles.greeting}>
+  Welcome back.
+  {"\n"}
+  What are we building today?
+</Text>
 
-          <Text style={styles.subtitle}>
-            Ask questions, explore ideas, create images,
-            analyze files and turn your thoughts into something
-            powerful with Zuri.
-          </Text>
+<Text style={styles.subtitle}>
+  Build brands, generate stunning images, create videos,
+  design websites, write code, analyze documents and bring
+  your biggest ideas to life with Zuri AI.
+</Text>
 
           <TouchableOpacity
             style={styles.chatButton}
@@ -136,7 +138,14 @@ export default function Home() {
           <TouchableOpacity
             style={styles.actionCard}
             activeOpacity={0.8}
-            onPress={() => router.push("/chat")}
+onPress={() =>
+  router.push({
+    pathname: "/chat",
+    params: {
+      mode: "image",
+    },
+  })
+}
           >
             <View style={styles.actionIcon}>
               <Text style={styles.actionIconText}>

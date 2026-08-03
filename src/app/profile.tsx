@@ -164,10 +164,10 @@ export default function Profile() {
           <View style={styles.menuCard}>
             {/* History */}
             <TouchableOpacity
-              style={styles.menuItem}
-              activeOpacity={0.7}
-              onPress={() => router.push("/history")}
-            >
+  style={styles.menuItem}
+  activeOpacity={0.7}
+  onPress={() => router.push("/memory")}
+>
               <View style={styles.menuIcon}>
                 <Text style={styles.menuIconText}>
                   ◇
@@ -181,34 +181,6 @@ export default function Profile() {
 
                 <Text style={styles.menuSubtitle}>
                   Return to your previous conversations
-                </Text>
-              </View>
-
-              <Text style={styles.menuArrow}>
-                →
-              </Text>
-            </TouchableOpacity>
-
-            <View style={styles.divider} />
-
-            {/* Memory */}
-            <TouchableOpacity
-              style={styles.menuItem}
-              activeOpacity={0.7}
-            >
-              <View style={styles.menuIcon}>
-                <Text style={styles.menuIconText}>
-                  ✦
-                </Text>
-              </View>
-
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>
-                  Memory
-                </Text>
-
-                <Text style={styles.menuSubtitle}>
-                  Manage what Zuri remembers about you
                 </Text>
               </View>
 

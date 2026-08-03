@@ -9,42 +9,42 @@ export default function FeatureGrid() {
   return (
     <View style={styles.container}>
       <FeatureCard
-        icon="✦"
-        title="Deep Research"
-        subtitle="Explore complex ideas and uncover deeper insights."
+        icon="🎨"
+        title="Image Studio"
+        subtitle="Generate, edit and enhance images."
         accent="gold"
       />
 
       <FeatureCard
-        icon="⌘"
-        title="Code Assistant"
-        subtitle="Build, debug and understand your code."
+        icon="🎬"
+        title="Video Studio"
+        subtitle="Create AI videos and animations."
       />
 
       <FeatureCard
-        icon="◉"
-        title="Vision"
-        subtitle="Understand images, designs and screenshots."
+        icon="💻"
+        title="Website Studio"
+        subtitle="Build modern websites with AI."
         accent="gold"
       />
 
       <FeatureCard
-        icon="◈"
-        title="Voice"
-        subtitle="Have natural conversations with Zuri."
+        icon="📱"
+        title="App Studio"
+        subtitle="Design and develop mobile apps."
       />
 
       <FeatureCard
-        icon="∞"
-        title="Memory"
-        subtitle="Keep important context across conversations."
+        icon="🤖"
+        title="Zuri Chat"
+        subtitle="Research, code and solve anything."
         accent="gold"
       />
 
       <FeatureCard
-        icon="▤"
-        title="Documents"
-        subtitle="Read, understand and explore your files."
+        icon="📄"
+        title="Document Studio"
+        subtitle="Write, summarize and analyze files."
       />
     </View>
   );

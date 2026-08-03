@@ -1,16 +1,13 @@
-import {
-  runProvider,
-  streamProvider,
-} from "../providers/index.js";
 
 import { executeTool } from "../services/tools/executeTool.js";
-
+import { detectAfricanContext } from "./africanContext.js";
 import { think } from "./brainRouter.js";
+import { dispatch } from "./dispatcher.js";
+import { detectGoal } from "./goalEngine.js";
 import { retrieveRelevantMemories } from "./memoryEngine.js";
 import { selectModel } from "./modelRouter.js";
 import { createPlan } from "./planner.js";
 import { buildSystemPrompt } from "./promptBuilder.js";
-
 /**
  * =====================================================
  * Prepare AI Context
@@ -31,6 +28,12 @@ async function prepareContext({
   // ==========================================
 
   const decision = await think(message);
+
+  const africanContext = detectAfricanContext(message);
+decision.africanContext = africanContext;
+
+const goal = detectGoal(message);
+decision.goalEngine = goal;
 
   if (hasImage) {
     decision.tool = "vision";
@@ -223,7 +226,9 @@ export async function runZuri({
 
     });
 
-  return await runProvider(context);
+
+
+return await dispatch(context);
 
 }
 
@@ -268,6 +273,9 @@ export async function runZuri({
 
     });
 
-  return await streamProvider(context);
+return await dispatch({
+    ...context,
+    stream: true,
+});
 
 }

@@ -1,28 +1,62 @@
 /**
- * Returns only memories relevant to
- * the current user message.
+ * =====================================================
+ * Retrieve Relevant Memories
+ * =====================================================
+ *
+ * Returns the memories that are most relevant
+ * to the current conversation.
  */
+
 export function retrieveRelevantMemories(
   message,
   memories = []
 ) {
-  if (!message || !memories.length) {
+  if (!message || !Array.isArray(memories)) {
     return [];
   }
 
-  const text = message.toLowerCase();
+  const text = message
+    .toLowerCase()
+    .trim();
 
-  return memories
-    .filter((memory) => {
-      const words = memory
-        .toLowerCase()
-        .split(/\s+/);
+  const scored = memories.map((memory) => {
 
-      return words.some(
-        (word) =>
-          word.length > 3 &&
-          text.includes(word)
-      );
-    })
-    .slice(0, 5);
+    const memoryText = memory
+      .toLowerCase();
+
+    let score = 0;
+
+    // Exact match
+    if (memoryText.includes(text)) {
+      score += 100;
+    }
+
+    // Shared words
+    const messageWords = text.split(/\s+/);
+
+    for (const word of messageWords) {
+
+      if (word.length < 3) continue;
+
+      if (memoryText.includes(word)) {
+        score += 10;
+      }
+
+    }
+
+    // Prefer shorter, more focused memories
+    score -= memoryText.length / 200;
+
+    return {
+      memory,
+      score,
+    };
+
+  });
+
+  return scored
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .map(item => item.memory);
 }

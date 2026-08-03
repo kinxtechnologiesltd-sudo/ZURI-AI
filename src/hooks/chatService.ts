@@ -1,14 +1,10 @@
-import {
-  addDoc,
-  collection,
-  getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
-} from "firebase/firestore";
+import { auth } from "../firebase/firebaseConfig";
 
-import { auth, db } from "../firebase/firebaseConfig";
+const API_URL = "http://localhost:3001";
 
+// ==========================
+// SAVE MESSAGE
+// ==========================
 export const saveMessage = async (
   conversationId: string,
   sender: "user" | "ai",
@@ -23,40 +19,36 @@ export const saveMessage = async (
       return;
     }
 
-    console.log(
-      "Saving to:",
-      "users",
-      user.uid,
-      "conversations",
-      conversationId,
-      "messages"
+    const response = await fetch(
+      `${API_URL}/conversation/message`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          conversationId,
+          role: sender,
+          content: text,
+          imageUrl,
+        }),
+      }
     );
 
-    const messageData = {
-      sender,
-      text,
-      createdAt: serverTimestamp(),
-      ...(imageUrl ? { imageUrl } : {}),
-    };
+    const data = await response.json();
 
-    await addDoc(
-      collection(
-        db,
-        "users",
-        user.uid,
-        "conversations",
-        conversationId,
-        "messages"
-      ),
-      messageData
-    );
-
-    console.log("Message saved successfully.");
+    if (!response.ok) {
+      console.error("Error saving message:", data);
+    }
   } catch (error) {
-    console.error("Firestore Error:", error);
+    console.error("Error saving message:", error);
   }
 };
 
+// ==========================
+// LOAD MESSAGES
+// ==========================
 export const loadMessages = async (
   conversationId: string
 ) => {
@@ -67,34 +59,26 @@ export const loadMessages = async (
       return [];
     }
 
-    const q = query(
-      collection(
-        db,
-        "users",
-        user.uid,
-        "conversations",
-        conversationId,
-        "messages"
-      ),
-      orderBy("createdAt", "asc")
+    const response = await fetch(
+      `${API_URL}/conversation/${user.uid}/${conversationId}`
     );
 
-    const snapshot = await getDocs(q);
+    const data = await response.json();
 
-    return snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...(doc.data() as {
-        sender: "user" | "ai";
-        text: string;
-        imageUrl?: string;
-      }),
+    if (!response.ok) {
+      console.error(data);
+      return [];
+    }
+
+    return data.messages.map((message: any) => ({
+      id: message.id,
+      sender: message.role,
+      text: message.content,
+      imageUrl: message.imageUrl,
+      createdAt: message.createdAt,
     }));
   } catch (error) {
-    console.error(
-      "Error loading messages:",
-      error
-    );
-
+    console.error("Error loading messages:", error);
     return [];
   }
 };

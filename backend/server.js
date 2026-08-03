@@ -4,11 +4,11 @@ import express from "express";
 import multer from "multer";
 // Routes
 import chatRoutes from "./routes/chat.js";
+import conversationRoutes from "./routes/conversation.js";
 import healthRoutes from "./routes/health.js";
 import imageRoutes from "./routes/image.js";
 import subscriptionRoutes from "./routes/subscription.js";
 import voiceRoutes from "./routes/voice.js";
-
 dotenv.config();
 
 // ===========================================
@@ -80,6 +80,8 @@ app.use("/image", imageRoutes);
 app.use("/subscription", subscriptionRoutes);
 
 app.use("/health", healthRoutes);
+
+app.use("/conversation", conversationRoutes);
 // ===========================================
 // GLOBAL ERROR HANDLER
 // ===========================================

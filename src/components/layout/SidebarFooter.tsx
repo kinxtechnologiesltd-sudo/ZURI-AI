@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { getAuth } from "firebase/auth";
 import {
   StyleSheet,
   Text,
@@ -9,47 +10,72 @@ import useUserPlan from "../../hooks/useUserPlan";
 export default function SidebarFooter() {
     const router = useRouter();
     const { isProUser, planLoading } = useUserPlan();
+    const auth = getAuth();
+const user = auth.currentUser;
+
+const displayName =
+  user?.displayName ||
+  user?.email?.split("@")[0] ||
+  "User";
+
+const avatarLetter =
+  displayName.charAt(0).toUpperCase();
   return (
     <View style={styles.container}>
-      {/* User Profile */}
-      <View style={styles.userCard}>
-        <View style={styles.avatarOuter}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>J</Text>
-          </View>
-        </View>
+      <TouchableOpacity
+  style={styles.userCard}
+  activeOpacity={0.8}
+  onPress={() => router.push("/pro")}
+>
+  <View style={styles.avatarOuter}>
+    <View style={styles.avatar}>
+      <Text style={styles.avatarText}>
+        {avatarLetter}
+      </Text>
+    </View>
+  </View>
 
-        <View style={styles.userInfo}>
-          <Text style={styles.name}>Joseph</Text>
+  <View style={styles.userInfo}>
+    <Text style={styles.name}>
+      {displayName}
+    </Text>
 
-          <View style={styles.planRow}>
-            <View style={styles.planDot} />
-            <Text style={styles.plan}>Pro Member</Text>
-          </View>
-        </View>
+    <View style={styles.planRow}>
+      <View style={styles.planDot} />
 
-        <TouchableOpacity
-          style={styles.moreButton}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.moreText}>•••</Text>
-        </TouchableOpacity>
-      </View>
+      <Text style={styles.plan}>
+        {isProUser
+          ? "Pro Member"
+          : "Free Plan"}
+      </Text>
+    </View>
+  </View>
+
+  <TouchableOpacity
+    style={styles.moreButton}
+    activeOpacity={0.7}
+  >
+    <Text style={styles.moreText}>
+      •••
+    </Text>
+  </TouchableOpacity>
+</TouchableOpacity>
 
       {/* Settings */}
-      <TouchableOpacity
-        style={styles.settings}
-        activeOpacity={0.8}
-      >
-        <View style={styles.settingsIcon}>
-          <Text style={styles.settingsIconText}>⚙</Text>
-        </View>
+    {/* Settings */}
+<TouchableOpacity
+  style={styles.settings}
+  activeOpacity={0.8}
+  onPress={() => router.push("/settings")}
+>
+  <View style={styles.settingsIcon}>
+    <Text style={styles.settingsIconText}>⚙</Text>
+  </View>
 
-        <Text style={styles.settingsText}>
-          Settings
-        </Text>
-      </TouchableOpacity>
-
+  <Text style={styles.settingsText}>
+    Settings
+  </Text>
+</TouchableOpacity>
       {/* Zuri Pro Card */}
      {!planLoading && (
   isProUser ? (

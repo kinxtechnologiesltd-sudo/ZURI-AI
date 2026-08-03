@@ -1,17 +1,10 @@
-import {
-  addDoc,
-  collection,
-  doc,
-  getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-} from "firebase/firestore";
+import { auth } from "../firebase/firebaseConfig";
 
-import { auth, db } from "../firebase/firebaseConfig";
+const API_URL = "http://localhost:3001";
 
+// ==========================
 // CREATE NEW CONVERSATION
+// ==========================
 export const createConversation = async () => {
   try {
     const user = auth.currentUser;
@@ -21,64 +14,94 @@ export const createConversation = async () => {
       return null;
     }
 
-    const conversationsRef = collection(
-      db,
-      "users",
-      user.uid,
-      "conversations"
+    const response = await fetch(
+      `${API_URL}/conversation/create`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          title: "New Conversation",
+          model: "gpt-5.5",
+        }),
+      }
     );
 
-    const docRef = await addDoc(conversationsRef, {
-      title: "New Conversation",
-      createdAt: serverTimestamp(),
-    });
+    const data = await response.json();
 
-    return docRef.id;
+    if (!response.ok) {
+      console.error(data);
+      return null;
+    }
+
+    return data.conversation.id;
   } catch (error) {
     console.error("Error creating conversation:", error);
     return null;
   }
 };
 
+// ==========================
 // GET SINGLE CONVERSATION
+// ==========================
 export const getConversation = async (
   conversationId: string
 ) => {
-  return conversationId;
+  try {
+    const user = auth.currentUser;
+
+    if (!user) return [];
+
+    const response = await fetch(
+      `${API_URL}/conversation/${user.uid}/${conversationId}`
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(data);
+      return [];
+    }
+
+    return data.messages;
+  } catch (error) {
+    console.error("Error loading conversation:", error);
+    return [];
+  }
 };
 
+// ==========================
 // GET ALL CONVERSATIONS
+// ==========================
 export const getConversations = async () => {
   try {
     const user = auth.currentUser;
 
     if (!user) return [];
 
-    const q = query(
-      collection(
-        db,
-        "users",
-        user.uid,
-        "conversations"
-      ),
-      orderBy("createdAt", "desc")
+    const response = await fetch(
+      `${API_URL}/conversation/${user.uid}`
     );
 
-    const snapshot = await getDocs(q);
+    const data = await response.json();
 
-    return snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...(doc.data() as {
-        title: string;
-      }),
-    }));
+    if (!response.ok) {
+      console.error(data);
+      return [];
+    }
+
+    return data.conversations;
   } catch (error) {
-    console.error(error);
+    console.error("Error loading conversations:", error);
     return [];
   }
 };
 
+// ==========================
 // UPDATE CONVERSATION TITLE
+// ==========================
 export const updateConversationTitle = async (
   conversationId: string,
   title: string
@@ -88,17 +111,24 @@ export const updateConversationTitle = async (
 
     if (!user) return;
 
-    const conversationRef = doc(
-      db,
-      "users",
-      user.uid,
-      "conversations",
-      conversationId
+    const response = await fetch(
+      `${API_URL}/conversation/rename`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          conversationId,
+          title,
+        }),
+      }
     );
 
-    await updateDoc(conversationRef, {
-      title,
-    });
+    if (!response.ok) {
+      console.error(await response.json());
+    }
   } catch (error) {
     console.error(
       "Error updating conversation title:",

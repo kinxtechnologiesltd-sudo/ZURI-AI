@@ -1,4 +1,6 @@
 import { router } from "expo-router";
+import { getAuth } from "firebase/auth";
+import { useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -7,11 +9,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
-import { useState } from "react";
 import AthenaLogo from "../components/ui/AthenaLogo";
 import BottomNav from "../components/ui/BottomNav";
 import { usePreferences } from "../context/PreferencesContext";
+import useUserPlan from "../hooks/useUserPlan";
 export default function Settings() {
 const {
   voiceGender,
@@ -23,6 +24,23 @@ const {
   responseLength,
   setResponseLength,
 } = usePreferences();
+const { isProUser } = useUserPlan();
+
+const auth = getAuth();
+
+const user = auth.currentUser;
+
+const displayName =
+  user?.displayName ||
+  preferredName ||
+  user?.email?.split("@")[0] ||
+  "User";
+
+const email =
+  user?.email || "No email available";
+
+const avatarLetter =
+  displayName.charAt(0).toUpperCase();
 const [showVoiceOptions, setShowVoiceOptions] =
   useState(false);
   const [
@@ -158,15 +176,25 @@ const [showVoiceOptions, setShowVoiceOptions] =
   </View>
 )}
 
-          <Divider />
+<Divider />
 
-          <SettingItem
+<SettingItem
   icon="✦"
   title="Memory"
   subtitle="Manage what Zuri remembers about you"
   onPress={() => router.push("/memory")}
 />
-          <Divider />
+
+<Divider />
+
+<SettingItem
+  icon="♢"
+  title="Subscription"
+  subtitle="Manage your Zuri plan"
+  onPress={() => router.push("/pro")}
+/>
+
+<Divider />
 
 <TouchableOpacity
   style={styles.personalizationHeader}
@@ -285,12 +313,36 @@ const [showVoiceOptions, setShowVoiceOptions] =
         <Text style={styles.sectionLabel}>ACCOUNT</Text>
 
         <View style={styles.settingsCard}>
-          <SettingItem
-            icon="◌"
-            title="Profile"
-            subtitle="View and manage your account"
-            onPress={() => router.push("/profile")}
-          />
+         <View style={styles.profileCard}>
+  <View style={styles.profileAvatar}>
+    <Text style={styles.profileAvatarText}>
+      {avatarLetter}
+    </Text>
+  </View>
+
+  <View style={styles.profileInfo}>
+    <Text style={styles.profileName}>
+   {displayName}
+    </Text>
+
+   <Text style={styles.profileEmail}>
+  {email}
+</Text>
+
+    <Text style={styles.profilePlan}>
+      {isProUser ? "✦ Zuri Pro Member" : "Free Plan"}
+    </Text>
+  </View>
+
+  <TouchableOpacity
+    style={styles.manageButton}
+    onPress={() => router.push("/pro")}
+  >
+    <Text style={styles.manageButtonText}>
+      Manage
+    </Text>
+  </TouchableOpacity>
+</View>
 
           <Divider />
 
@@ -405,6 +457,64 @@ function Divider() {
 }
 
 const styles = StyleSheet.create({
+  profileCard: {
+  minHeight: 92,
+  flexDirection: "row",
+  alignItems: "center",
+  paddingVertical: 16,
+},
+
+profileAvatar: {
+  width: 52,
+  height: 52,
+  borderRadius: 26,
+  backgroundColor: "#10282E",
+  justifyContent: "center",
+  alignItems: "center",
+  marginRight: 14,
+},
+
+profileAvatarText: {
+  color: "#D4A72C",
+  fontSize: 22,
+  fontWeight: "800",
+},
+
+profileInfo: {
+  flex: 1,
+},
+
+profileName: {
+  color: "#F3F4EF",
+  fontSize: 16,
+  fontWeight: "800",
+},
+
+profileEmail: {
+  color: "#7C9396",
+  fontSize: 12,
+  marginTop: 3,
+},
+
+profilePlan: {
+  color: "#10E0D4",
+  fontSize: 11,
+  fontWeight: "700",
+  marginTop: 6,
+},
+
+manageButton: {
+  backgroundColor: "#1A3136",
+  borderRadius: 12,
+  paddingHorizontal: 16,
+  paddingVertical: 10,
+},
+
+manageButtonText: {
+  color: "#D4A72C",
+  fontWeight: "700",
+  fontSize: 12,
+},
     personalizationHeader: {
   minHeight: 82,
   flexDirection: "row",

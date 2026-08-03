@@ -1,23 +1,23 @@
 
 import {
-  AudioModule,
-  RecordingPresets,
-  useAudioRecorder,
+    AudioModule,
+    RecordingPresets,
+    useAudioRecorder,
 } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
 import { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from "react-native";
 import MessageBubble from "../components/chat/MessageBubble";
-import Hero from "../components/Hero";
+import Hero from "../components/home-v2/Hero";
 import RightPanel from "../components/layout/RightPanel";
 import Sidebar from "../components/layout/Sidebar";
 import TopHeader from "../components/layout/TopHeader";
@@ -26,12 +26,12 @@ import { usePreferences } from "../context/PreferencesContext";
 import { getMemories } from "../hooks/memoryService";
 
 import {
-  loadMessages,
-  saveMessage,
+    loadMessages,
+    saveMessage,
 } from "../hooks/chatService";
 import {
-  createConversation,
-  updateConversationTitle,
+    createConversation,
+    updateConversationTitle,
 } from "../hooks/conversationService";
 import { uploadGeneratedImage } from "../hooks/imageStorageService";
 import useUserPlan from "../hooks/useUserPlan";
@@ -363,27 +363,45 @@ const isDesktop = width >= 1024;
 }
 const data = await loadMessages(currentConversationId);
 
-    if (data.length > 0) {
-      setMessages(
-       data.map((message: any) => ({
+console.log("=================================");
+console.log("Loaded Messages:", data);
+console.log("Message Count:", data.length);
+console.log("=================================");
+
+if (data.length > 0) {
+const formattedMessages = data.map((message: Message) => ({
   sender: message.sender,
   text: message.text,
   imageUrl: message.imageUrl,
-}))
-      );
-    } else {
-      setMessages([
-        {
-          sender: "ai",text: "Start chatting with Zuri...",
-        },
-      ]);
-    }
+}));
+
+console.log("Formatted Messages:", formattedMessages);
+
+console.log("Before setMessages:", messages);
+
+setMessages(formattedMessages);
+
+setTimeout(() => {
+  console.log("After setMessages (next tick):", formattedMessages);
+}, 0);
+console.log("Messages state will become:", formattedMessages);
+} else {
+console.log("========== USE EFFECT ==========");
+console.log("Current Conversation ID:", currentConversationId);
+console.log("================================");
+
+  setMessages([
+    {
+      sender: "ai",
+      text: "Start chatting with Zuri...",
+    },
+  ]);
+}
+
   };
 
-  fetchMessages();
+fetchMessages();
 }, [currentConversationId]);
-
-  
   
 const callAthena = async (message: string) => {
   // Create the request form
@@ -394,7 +412,15 @@ const callAthena = async (message: string) => {
     "message",
     message
   );
-
+formData.append(
+  "history",
+  JSON.stringify(
+    messages.slice(-20).map((msg) => ({
+      sender: msg.sender,
+      text: msg.text,
+    }))
+  )
+);
   // Load the logged-in user's saved memories
   const savedMemories = await getMemories();
 
