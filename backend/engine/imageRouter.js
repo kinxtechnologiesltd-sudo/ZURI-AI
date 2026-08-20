@@ -5,34 +5,83 @@ export function selectImageProvider({
   edit = false,
   quality = "high",
 }) {
-  const text = prompt.toLowerCase();
+  const text = (prompt || "").toLowerCase();
 
-  // Image editing is OpenAI's strength
+  // =========================================
+  // IMAGE EDITING
+  // =========================================
+  // Keep editing on OpenAI for now.
+
   if (edit) {
+    console.log(
+      "🧭 IMAGE ROUTER: Edit → OpenAI"
+    );
+
     return "openai";
   }
 
-  // Anime / illustrations
+  // =========================================
+  // COMIC DETECTION
+  // =========================================
+
+  const comicKeywords = [
+    "comic",
+    "comics",
+    "comic book",
+    "comic-book",
+    "comicbook",
+    "graphic novel",
+    "graphic-novel",
+    "manga",
+    "manga panel",
+    "comic panel",
+    "comic panels",
+    "comic strip",
+    "webcomic",
+    "web comic",
+    "storyboard",
+    "illustrated story",
+    "comic illustration",
+  ];
+
+  const isComic = comicKeywords.some(
+    (keyword) => text.includes(keyword)
+  );
+
+  if (isComic) {
+    console.log(
+      "🧭 IMAGE ROUTER: Comic → Fal"
+    );
+
+    return "fal";
+  }
+
+  // =========================================
+  // ANIME / SPECIALIZED ILLUSTRATION
+  // =========================================
+  // Keep these on OpenAI for now.
+
   if (
     text.includes("anime") ||
-    text.includes("manga") ||
     text.includes("ghibli") ||
     text.includes("demon slayer") ||
     text.includes("jujutsu") ||
     text.includes("jjk")
   ) {
+    console.log(
+      "🧭 IMAGE ROUTER: Anime/Illustration → OpenAI"
+    );
+
     return "openai";
   }
 
-  // Photorealistic images
-  if (
-    text.includes("realistic") ||
-    text.includes("portrait") ||
-    text.includes("photograph")
-  ) {
-    return "stability";
-  }
+  // =========================================
+  // DEFAULT IMAGE GENERATION
+  // =========================================
 
-  // Default
+  console.log(
+    "🧭 IMAGE ROUTER: Normal image → OpenAI"
+  );
+
   return "openai";
 }

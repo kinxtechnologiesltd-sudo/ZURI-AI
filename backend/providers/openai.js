@@ -7,24 +7,58 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-/**
- * Standard Chat Completion
- */
+const DEFAULT_MODEL = "gpt-5.6";
+
+function normalizeResponse(response, model) {
+  const text = response.output_text || "";
+
+  return {
+    ...response,
+    success: true,
+    provider: "openai",
+    model,
+    text,
+    output_text: text,
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content: text,
+        },
+        finish_reason: "stop",
+      },
+    ],
+    raw: response,
+  };
+}
+
 export async function chatWithOpenAI(
   messages,
-  model = "gpt-5",
+  model = DEFAULT_MODEL,
   options = {}
 ) {
   try {
-    const response = await client.chat.completions.create({
+    console.log(
+      "🤖 Primary provider: OpenAI"
+    );
+
+    console.log(
+      "🧠 OpenAI model:",
+      model
+    );
+
+    const response = await client.responses.create({
       model,
-      messages,
-      temperature: options.temperature ?? 0.7,
-      max_completion_tokens:
+      input: messages,
+      max_output_tokens:
         options.maxTokens ?? 4000,
     });
 
-    return response;
+    return normalizeResponse(
+      response,
+      model
+    );
   } catch (error) {
     console.error("OpenAI Error:", error);
 
@@ -37,18 +71,19 @@ export async function chatWithOpenAI(
  */
 export async function streamWithOpenAI(
   messages,
-  model = "gpt-5",
+  model = DEFAULT_MODEL,
   options = {}
 ) {
   try {
-    return await client.chat.completions.create({
+    const response = await client.responses.create({
       model,
-      messages,
+      input: messages,
       stream: true,
-      temperature: options.temperature ?? 0.7,
-      max_completion_tokens:
+      max_output_tokens:
         options.maxTokens ?? 4000,
     });
+
+    return response;
   } catch (error) {
     console.error(
       "OpenAI Stream Error:",

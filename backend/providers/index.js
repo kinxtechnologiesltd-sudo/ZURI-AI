@@ -8,6 +8,9 @@ import {
   streamWithOpenAI,
 } from "./openai.js";
 
+const GROQ_FALLBACK_MODEL =
+  "openai/gpt-oss-120b";
+
 /**
  * Standard request/response
  */
@@ -26,11 +29,23 @@ export async function runProvider({
       );
 
     case "openai":
-      return await chatWithOpenAI(
-        messages,
-        model,
-        options
-      );
+      try {
+        return await chatWithOpenAI(
+          messages,
+          model,
+          options
+        );
+      } catch (error) {
+        console.warn(
+          "⚠️ OpenAI failed — falling back to Groq"
+        );
+
+        return await chatWithGroq(
+          messages,
+          GROQ_FALLBACK_MODEL,
+          options
+        );
+      }
 
     default:
       throw new Error(
@@ -57,11 +72,23 @@ export async function streamProvider({
       );
 
     case "openai":
-      return await streamWithOpenAI(
-        messages,
-        model,
-        options
-      );
+      try {
+        return await streamWithOpenAI(
+          messages,
+          model,
+          options
+        );
+      } catch (error) {
+        console.warn(
+          "⚠️ OpenAI failed — falling back to Groq"
+        );
+
+        return await streamWithGroq(
+          messages,
+          GROQ_FALLBACK_MODEL,
+          options
+        );
+      }
 
     default:
       throw new Error(

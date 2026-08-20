@@ -65,17 +65,25 @@ export async function searchWeb(query) {
     }
 
     return {
-      success: true,
+  success: true,
+  provider: "tavily",
 
-      answer: data.answer || "",
+  answer:
+    data?.answer ||
+    null,
 
-      results: (data.results || []).map(result => ({
-        title: result.title,
-        url: result.url,
-        content: result.content,
-        score: result.score,
-      })),
-    };
+  results:
+    Array.isArray(data?.results)
+      ? data.results
+      : [],
+
+  images:
+    Array.isArray(data?.images)
+      ? data.images
+      : [],
+
+  raw: data,
+};
 
   } catch (error) {
 

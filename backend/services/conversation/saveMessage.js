@@ -20,6 +20,9 @@ export async function saveMessage(
       role,
       content,
       images: options.images || [],
+      researchImages: Array.isArray(options.researchImages)
+        ? options.researchImages
+        : [],
       files: options.files || [],
       voice: options.voice || null,
       metadata: options.metadata || {},

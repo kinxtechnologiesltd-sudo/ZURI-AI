@@ -10,7 +10,7 @@ export function selectModel({
   if (hasImage) {
     return {
       provider: "openai",
-      model: "gpt-5",
+      model: "gpt-5.6-terra",
     };
   }
 
@@ -18,7 +18,7 @@ export function selectModel({
   if (wantsImageGeneration) {
     return {
       provider: "openai",
-      model: "gpt-image-1",
+      model: "gpt-image-2",
     };
   }
 
@@ -26,33 +26,39 @@ export function selectModel({
   if (wantsImageEditing) {
     return {
       provider: "openai",
-      model: "gpt-image-1",
+      model: "gpt-image-2",
     };
   }
 
   switch (tool) {
+    case "image-generation":
+      return {
+        provider: "openai",
+        model: "gpt-image-2",
+      };
+
     case "coding":
       return {
         provider: "openai",
-        model: "gpt-5",
+        model: "gpt-5.6-terra",
       };
 
     case "reasoning":
       return {
         provider: "openai",
-        model: "gpt-5",
+        model: "gpt-5.6-terra",
       };
 
     case "search":
       return {
         provider: "openai",
-        model: "gpt-5",
+        model: "gpt-5.6-terra",
       };
 
     default:
       return {
-        provider: "groq",
-        model: "llama-3.3-70b-versatile",
+        provider: "openai",
+        model: "gpt-5.6-terra",
       };
   }
 }
