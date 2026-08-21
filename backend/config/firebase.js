@@ -7,18 +7,46 @@ import {
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 
-function getFirebaseCredentials() {
-  const privateKey =
-    process.env.FIREBASE_PRIVATE_KEY?.replace(
-      /\\n/g,
-      "\n"
-    );
+/**
+ * =====================================================
+ * FIREBASE ADMIN CREDENTIALS
+ * =====================================================
+ *
+ * Credentials are read from environment variables.
+ *
+ * Required:
+ * FIREBASE_PROJECT_ID
+ * FIREBASE_CLIENT_EMAIL
+ * FIREBASE_PRIVATE_KEY
+ */
 
+function getFirebaseCredentials() {
   const projectId =
-    process.env.FIREBASE_PROJECT_ID;
+    process.env.FIREBASE_PROJECT_ID?.trim();
 
   const clientEmail =
-    process.env.FIREBASE_CLIENT_EMAIL;
+    process.env.FIREBASE_CLIENT_EMAIL?.trim();
+
+  const privateKey =
+    process.env.FIREBASE_PRIVATE_KEY
+      ?.replace(/\\n/g, "\n")
+      .trim();
+
+  /**
+   * Safe diagnostic.
+   *
+   * This ONLY reports whether each variable exists.
+   * It NEVER prints the actual credentials.
+   */
+
+  console.log(
+    "🔥 Firebase environment check:",
+    {
+      projectId: Boolean(projectId),
+      clientEmail: Boolean(clientEmail),
+      privateKey: Boolean(privateKey),
+    }
+  );
 
   if (
     !projectId ||
@@ -26,7 +54,7 @@ function getFirebaseCredentials() {
     !privateKey
   ) {
     throw new Error(
-      "Firebase Admin credentials are missing. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY."
+      "Firebase Admin credentials are missing."
     );
   }
 
@@ -37,6 +65,12 @@ function getFirebaseCredentials() {
   };
 }
 
+/**
+ * =====================================================
+ * INITIALIZE FIREBASE ADMIN
+ * =====================================================
+ */
+
 const app =
   getApps().length > 0
     ? getApps()[0]
@@ -46,8 +80,18 @@ const app =
         ),
       });
 
+/**
+ * =====================================================
+ * FIREBASE SERVICES
+ * =====================================================
+ */
+
 export const adminAuth =
   getAuth(app);
 
 export const adminDb =
   getFirestore(app);
+
+console.log(
+  "✅ Firebase Admin initialized successfully."
+);
