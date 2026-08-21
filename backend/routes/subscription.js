@@ -3,35 +3,27 @@ import express from "express";
 import { adminAuth, adminDb } from "../config/firebase.js";
 
 const router = express.Router();
-const verifyFirebaseUser = async (
-  req,
-  res,
-  next
-) => {
-  try {
-    const authHeader =
-      req.headers.authorization;
 
-    if (
-      !authHeader ||
-      !authHeader.startsWith(
-        "Bearer "
-      )
-    ) {
+/**
+ * ===========================================
+ * FIREBASE AUTHENTICATION
+ * ===========================================
+ */
+
+const verifyFirebaseUser = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
         success: false,
-        message:
-          "Authentication required.",
+        message: "Authentication required.",
       });
     }
 
-    const idToken =
-      authHeader.substring(7);
+    const idToken = authHeader.substring(7);
 
-    const decodedToken =
-      await adminAuth.verifyIdToken(
-        idToken
-      );
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
 
     req.user = decodedToken;
 
@@ -44,40 +36,35 @@ const verifyFirebaseUser = async (
 
     return res.status(401).json({
       success: false,
-      message:
-        "Invalid or expired authentication.",
+      message: "Invalid or expired authentication.",
     });
   }
 };
+
 /**
  * ===========================================
  * ZURI SUBSCRIPTION PLANS
  * ===========================================
  *
  * PRO
- * - Weekly
- * - Monthly
- * - Yearly
+ * - Weekly: ₦2,000
+ * - Monthly: ₦8,500
+ * - Yearly: ₦120,000
  *
  * ULTRA
- * - Monthly
- * - Yearly
+ * - Monthly: ₦10,000
+ * - Yearly: ₦130,000
  *
- * Prices are controlled by the backend.
- * Never trust prices sent from the frontend.
+ * Prices are controlled ONLY by backend.
  * ===========================================
  */
 
 const SUBSCRIPTION_PLANS = {
-  // =========================================
-  // ZURI PRO
-  // =========================================
-
   weekly: {
     name: "Zuri Pro Weekly",
     tier: "pro",
     subscriptionType: "weekly",
-    amount: 5000,
+    amount: 2000,
     currency: "NGN",
     durationDays: 7,
   },
@@ -86,7 +73,7 @@ const SUBSCRIPTION_PLANS = {
     name: "Zuri Pro Monthly",
     tier: "pro",
     subscriptionType: "monthly",
-    amount: 20000,
+    amount: 8500,
     currency: "NGN",
     durationDays: 30,
   },
@@ -95,20 +82,16 @@ const SUBSCRIPTION_PLANS = {
     name: "Zuri Pro Yearly",
     tier: "pro",
     subscriptionType: "yearly",
-    amount: 130000,
+    amount: 120000,
     currency: "NGN",
     durationDays: 365,
   },
-
-  // =========================================
-  // ZURI ULTRA
-  // =========================================
 
   "ultra-monthly": {
     name: "Zuri Ultra Monthly",
     tier: "ultra",
     subscriptionType: "ultra-monthly",
-    amount: 15000,
+    amount: 10000,
     currency: "NGN",
     durationDays: 30,
   },
@@ -117,7 +100,7 @@ const SUBSCRIPTION_PLANS = {
     name: "Zuri Ultra Yearly",
     tier: "ultra",
     subscriptionType: "ultra-yearly",
-    amount: 150000,
+    amount: 130000,
     currency: "NGN",
     durationDays: 365,
   },
@@ -131,7 +114,7 @@ const SUBSCRIPTION_PLANS = {
  */
 
 router.get("/plans", (req, res) => {
-  res.json({
+  return res.json({
     success: true,
     plans: SUBSCRIPTION_PLANS,
   });
@@ -139,7 +122,8 @@ router.get("/plans", (req, res) => {
 
 /**
  * ===========================================
- * CREATE CHECKOUT
+ * CREATE FLUTTERWAVE CHECKOUT
+ *
  * POST /subscription/create-checkout
  * ===========================================
  */
@@ -149,18 +133,39 @@ router.post(
   verifyFirebaseUser,
   async (req, res) => {
     try {
-const {
-  plan,
-  email,
-  name,
-} = req.body;
+      const {
+        plan,
+        email,
+        name,
+      } = req.body;
 
-const userId =
-  req.user.uid;
+      /**
+       * =====================================
+       * USER
+       * =====================================
+       */
 
-      // =========================================
-      // 1. VALIDATE PLAN
-      // =========================================
+      const userId = req.user.uid;
+
+      console.log(
+        "===================================="
+      );
+
+      console.log(
+        "🔥 CREATE FLUTTERWAVE CHECKOUT"
+      );
+
+      console.log({
+        userId,
+        email,
+        plan,
+      });
+
+      /**
+       * =====================================
+       * VALIDATE PLAN
+       * =====================================
+       */
 
       const selectedPlan =
         SUBSCRIPTION_PLANS[plan];
@@ -168,14 +173,15 @@ const userId =
       if (!selectedPlan) {
         return res.status(400).json({
           success: false,
-          message:
-            "Invalid subscription plan.",
+          message: "Invalid subscription plan.",
         });
       }
 
-      // =========================================
-      // 2. VALIDATE CUSTOMER
-      // =========================================
+      /**
+       * =====================================
+       * VALIDATE CUSTOMER EMAIL
+       * =====================================
+       */
 
       if (!email) {
         return res.status(400).json({
@@ -185,11 +191,11 @@ const userId =
         });
       }
 
-     
-
-      // =========================================
-      // 3. VERIFY FIREBASE USER EXISTS
-      // =========================================
+      /**
+       * =====================================
+       * VERIFY FIREBASE USER
+       * =====================================
+       */
 
       try {
         await adminAuth.getUser(userId);
@@ -206,114 +212,251 @@ const userId =
         });
       }
 
-      // =========================================
-      // 4. CREATE UNIQUE TRANSACTION REFERENCE
-      // =========================================
+      /**
+       * =====================================
+       * CHECK FLUTTERWAVE SECRET KEY
+       * =====================================
+       */
+
+      const flutterwaveSecret =
+        process.env.FLW_SECRET_KEY;
+
+      console.log(
+        "🔐 FLUTTERWAVE KEY CHECK:",
+        {
+          exists:
+            !!flutterwaveSecret,
+
+          length:
+            flutterwaveSecret?.length || 0,
+        }
+      );
+
+      if (!flutterwaveSecret) {
+        console.error(
+          "❌ FLW_SECRET_KEY is missing."
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            "Flutterwave payment configuration is missing.",
+        });
+      }
+
+      /**
+       * =====================================
+       * UNIQUE TRANSACTION REFERENCE
+       * =====================================
+       */
 
       const txRef =
         `ZURI-${plan}-${randomUUID()}`;
 
-      // =========================================
-      // 5. CREATE FLUTTERWAVE PAYMENT
-      // =========================================
+      console.log(
+        "💳 Flutterwave TX REF:",
+        txRef
+      );
 
-      const flutterwaveResponse =
-        await fetch(
-          "https://api.flutterwave.com/v3/payments",
-          {
-            method: "POST",
+      /**
+       * =====================================
+       * CREATE FLUTTERWAVE PAYMENT
+       * =====================================
+       */
 
-            headers: {
-              "Content-Type":
-                "application/json",
+      let flutterwaveResponse;
 
-              Authorization:
-                `Bearer ${process.env.FLW_SECRET_KEY}`,
-            },
+      try {
+        flutterwaveResponse =
+          await fetch(
+            "https://api.flutterwave.com/v3/payments",
+            {
+              method: "POST",
 
-            body: JSON.stringify({
-              tx_ref: txRef,
+              headers: {
+                "Content-Type":
+                  "application/json",
 
-              amount:
-                selectedPlan.amount,
-
-              currency:
-                selectedPlan.currency,
-
-              redirect_url:
-                process.env.FLW_REDIRECT_URL,
-
-              customer: {
-                email,
-
-                name:
-                  name || "Zuri User",
+                Authorization:
+                  `Bearer ${flutterwaveSecret}`,
               },
 
-              customizations: {
-                title:
-                  selectedPlan.name,
+              body: JSON.stringify({
+                tx_ref: txRef,
 
-                description:
-                  `Subscribe to ${selectedPlan.name}`,
-              },
+                amount:
+                  selectedPlan.amount,
 
-              meta: {
-                userId,
+                currency:
+                  selectedPlan.currency,
 
-                plan,
+                redirect_url:
+                  process.env
+                    .FLW_REDIRECT_URL,
 
-                tier:
-                  selectedPlan.tier,
+                customer: {
+                  email,
 
-                subscriptionType:
-                  selectedPlan.subscriptionType,
+                  name:
+                    name ||
+                    "Zuri User",
+                },
 
-                durationDays:
-                  selectedPlan.durationDays,
-              },
-            }),
-          }
+                customizations: {
+                  title:
+                    selectedPlan.name,
+
+                  description:
+                    `Subscribe to ${selectedPlan.name}`,
+                },
+
+                meta: {
+                  userId,
+
+                  plan,
+
+                  tier:
+                    selectedPlan.tier,
+
+                  subscriptionType:
+                    selectedPlan.subscriptionType,
+
+                  durationDays:
+                    selectedPlan.durationDays,
+                },
+              }),
+            }
+          );
+      } catch (networkError) {
+        console.error(
+          "❌ Flutterwave network error:",
+          networkError
         );
 
-      const data =
-        await flutterwaveResponse.json();
+        return res.status(502).json({
+          success: false,
+          message:
+            "Unable to connect to Flutterwave.",
+        });
+      }
+
+      /**
+       * =====================================
+       * READ RAW RESPONSE
+       * =====================================
+       */
+
+      const responseText =
+        await flutterwaveResponse.text();
 
       console.log(
-        "Flutterwave response:",
-        JSON.stringify(
-          data,
-          null,
-          2
+        "🔥 FLUTTERWAVE HTTP STATUS:",
+        flutterwaveResponse.status
+      );
+
+      console.log(
+        "🔥 FLUTTERWAVE CONTENT-TYPE:",
+        flutterwaveResponse.headers.get(
+          "content-type"
         )
       );
 
-      // =========================================
-      // 6. HANDLE FLUTTERWAVE ERROR
-      // =========================================
+      console.log(
+        "🔥 FLUTTERWAVE RAW RESPONSE:",
+        responseText
+      );
+
+      /**
+       * =====================================
+       * PARSE RESPONSE SAFELY
+       * =====================================
+       */
+
+      let data;
+
+      try {
+        data =
+          JSON.parse(responseText);
+      } catch (parseError) {
+        console.error(
+          "❌ Flutterwave did not return JSON."
+        );
+
+        return res.status(502).json({
+          success: false,
+
+          message:
+            "Flutterwave returned an invalid response.",
+
+          status:
+            flutterwaveResponse.status,
+        });
+      }
+
+      /**
+       * =====================================
+       * FLUTTERWAVE ERROR
+       * =====================================
+       */
 
       if (!flutterwaveResponse.ok) {
+        console.error(
+          "❌ Flutterwave checkout failed:",
+          data
+        );
+
         return res.status(
           flutterwaveResponse.status
         ).json({
           success: false,
 
           message:
-            data.message ||
+            data?.message ||
             "Flutterwave checkout failed.",
         });
       }
 
-      // =========================================
-      // 7. GET CHECKOUT URL
-      // =========================================
+      /**
+       * =====================================
+       * CHECK FLUTTERWAVE STATUS
+       * =====================================
+       */
+
+      if (
+        data?.status !==
+        "success"
+      ) {
+        console.error(
+          "❌ Flutterwave returned unsuccessful status:",
+          data
+        );
+
+        return res.status(502).json({
+          success: false,
+
+          message:
+            data?.message ||
+            "Flutterwave could not create checkout.",
+        });
+      }
+
+      /**
+       * =====================================
+       * GET HOSTED CHECKOUT LINK
+       * =====================================
+       */
 
       const checkoutUrl =
-        data.data?.link;
+        data?.data?.link;
+
+      console.log(
+        "🔗 FLUTTERWAVE CHECKOUT URL:",
+        checkoutUrl
+      );
 
       if (!checkoutUrl) {
         console.error(
-          "Flutterwave did not return checkout URL:",
+          "❌ No checkout URL returned by Flutterwave:",
           data
         );
 
@@ -325,11 +468,13 @@ const userId =
         });
       }
 
-      // =========================================
-      // 8. RETURN CHECKOUT INFORMATION
-      // =========================================
+      /**
+       * =====================================
+       * RETURN CHECKOUT TO FRONTEND
+       * =====================================
+       */
 
-      return res.json({
+      const responsePayload = {
         success: true,
 
         paymentReady: true,
@@ -360,11 +505,35 @@ const userId =
 
         message:
           "Flutterwave checkout created successfully.",
+      };
+
+      console.log(
+        "===================================="
+      );
+
+      console.log(
+        "✅ CHECKOUT READY FOR FRONTEND"
+      );
+
+      console.log({
+        plan,
+        amount:
+          selectedPlan.amount,
+        currency:
+          selectedPlan.currency,
+        checkoutUrl,
       });
 
+      console.log(
+        "===================================="
+      );
+
+      return res.json(
+        responsePayload
+      );
     } catch (error) {
       console.error(
-        "Flutterwave checkout error:",
+        "❌ Flutterwave checkout error:",
         error
       );
 
@@ -385,10 +554,6 @@ const userId =
  * VERIFY FLUTTERWAVE PAYMENT
  *
  * GET /subscription/verify?transaction_id=123
- *
- * IMPORTANT:
- * This is the ONLY place where a successful
- * payment grants the subscription.
  * ===========================================
  */
 
@@ -400,9 +565,11 @@ router.get(
         transaction_id,
       } = req.query;
 
-      // =========================================
-      // 1. VALIDATE TRANSACTION ID
-      // =========================================
+      /**
+       * =====================================
+       * VALIDATE TRANSACTION ID
+       * =====================================
+       */
 
       if (!transaction_id) {
         return res.status(400).json({
@@ -413,9 +580,38 @@ router.get(
         });
       }
 
-      // =========================================
-      // 2. VERIFY DIRECTLY WITH FLUTTERWAVE
-      // =========================================
+      /**
+       * =====================================
+       * CHECK FLUTTERWAVE KEY
+       * =====================================
+       */
+
+      const flutterwaveSecret =
+        process.env.FLW_SECRET_KEY;
+
+      if (!flutterwaveSecret) {
+        console.error(
+          "❌ FLW_SECRET_KEY is missing during verification."
+        );
+
+        return res.status(500).json({
+          success: false,
+
+          message:
+            "Flutterwave payment configuration is missing.",
+        });
+      }
+
+      console.log(
+        "🔐 VERIFYING FLUTTERWAVE PAYMENT:",
+        transaction_id
+      );
+
+      /**
+       * =====================================
+       * VERIFY DIRECTLY WITH FLUTTERWAVE
+       * =====================================
+       */
 
       const response =
         await fetch(
@@ -427,7 +623,7 @@ router.get(
 
             headers: {
               Authorization:
-                `Bearer ${process.env.FLW_SECRET_KEY}`,
+                `Bearer ${flutterwaveSecret}`,
 
               "Content-Type":
                 "application/json",
@@ -435,17 +631,47 @@ router.get(
           }
         );
 
-      const data =
-        await response.json();
+      /**
+       * =====================================
+       * READ RESPONSE SAFELY
+       * =====================================
+       */
+
+      const responseText =
+        await response.text();
 
       console.log(
-        "Flutterwave verification:",
-        JSON.stringify(
-          data,
-          null,
-          2
-        )
+        "🔥 FLUTTERWAVE VERIFY STATUS:",
+        response.status
       );
+
+      console.log(
+        "🔥 FLUTTERWAVE VERIFY RESPONSE:",
+        responseText
+      );
+
+      let data;
+
+      try {
+        data =
+          JSON.parse(responseText);
+      } catch (error) {
+        return res.status(502).json({
+          success: false,
+
+          message:
+            "Flutterwave returned an invalid verification response.",
+
+          status:
+            response.status,
+        });
+      }
+
+      /**
+       * =====================================
+       * FLUTTERWAVE VERIFICATION ERROR
+       * =====================================
+       */
 
       if (!response.ok) {
         return res.status(
@@ -454,17 +680,34 @@ router.get(
           success: false,
 
           message:
-            data.message ||
+            data?.message ||
             "Unable to verify transaction.",
         });
       }
 
-      const transaction =
-        data.data;
+      console.log(
+        "✅ Flutterwave verification:",
+        JSON.stringify(
+          data,
+          null,
+          2
+        )
+      );
 
-      // =========================================
-      // 3. PAYMENT MUST BE SUCCESSFUL
-      // =========================================
+      /**
+       * =====================================
+       * GET TRANSACTION
+       * =====================================
+       */
+
+      const transaction =
+        data?.data;
+
+      /**
+       * =====================================
+       * PAYMENT MUST BE SUCCESSFUL
+       * =====================================
+       */
 
       if (
         !transaction ||
@@ -481,9 +724,11 @@ router.get(
         });
       }
 
-      // =========================================
-      // 4. READ METADATA
-      // =========================================
+      /**
+       * =====================================
+       * PAYMENT METADATA
+       * =====================================
+       */
 
       const metadata =
         transaction.meta || {};
@@ -494,16 +739,10 @@ router.get(
       const plan =
         metadata.plan;
 
-      // =========================================
-      // 5. VALIDATE PLAN
-      // =========================================
-
-      if (!userId || !plan) {
-        console.error(
-          "Missing payment metadata:",
-          metadata
-        );
-
+      if (
+        !userId ||
+        !plan
+      ) {
         return res.status(400).json({
           success: false,
 
@@ -511,6 +750,12 @@ router.get(
             "Payment metadata is incomplete.",
         });
       }
+
+      /**
+       * =====================================
+       * VALIDATE PLAN
+       * =====================================
+       */
 
       const selectedPlan =
         SUBSCRIPTION_PLANS[plan];
@@ -524,9 +769,11 @@ router.get(
         });
       }
 
-      // =========================================
-      // 6. VERIFY AMOUNT
-      // =========================================
+      /**
+       * =====================================
+       * VERIFY AMOUNT
+       * =====================================
+       */
 
       const paidAmount =
         Number(
@@ -543,7 +790,7 @@ router.get(
         expectedAmount
       ) {
         console.error(
-          "Payment amount mismatch:",
+          "❌ Payment amount mismatch:",
           {
             paidAmount,
             expectedAmount,
@@ -561,9 +808,11 @@ router.get(
         });
       }
 
-      // =========================================
-      // 7. VERIFY CURRENCY
-      // =========================================
+      /**
+       * =====================================
+       * VERIFY CURRENCY
+       * =====================================
+       */
 
       if (
         transaction.currency !==
@@ -579,10 +828,11 @@ router.get(
         });
       }
 
-      // =========================================
-      // 8. VERIFY CUSTOMER EMAIL AGAINST
-      //    FIREBASE ACCOUNT
-      // =========================================
+      /**
+       * =====================================
+       * VERIFY FIREBASE USER
+       * =====================================
+       */
 
       let firebaseUser;
 
@@ -605,10 +855,11 @@ router.get(
         });
       }
 
-    
-      // =========================================
-      // 9. GET FIRESTORE USER DOCUMENT
-      // =========================================
+      /**
+       * =====================================
+       * FIRESTORE USER
+       * =====================================
+       */
 
       const userRef =
         adminDb
@@ -632,9 +883,11 @@ router.get(
       const existingUser =
         userSnapshot.data();
 
-      // =========================================
-      // 10. PREVENT REPLAYING THE SAME PAYMENT
-      // =========================================
+      /**
+       * =====================================
+       * PREVENT PAYMENT REPLAY
+       * =====================================
+       */
 
       const transactionId =
         String(
@@ -649,11 +902,6 @@ router.get(
         previousTransactionId ===
         transactionId
       ) {
-        console.log(
-          "ℹ️ Transaction already processed:",
-          transactionId
-        );
-
         return res.json({
           success: true,
 
@@ -671,7 +919,7 @@ router.get(
 
           expiresAt:
             existingUser
-              .subscriptionExpiresAt
+              ?.subscriptionExpiresAt
               ?.toDate
               ? existingUser
                   .subscriptionExpiresAt
@@ -684,9 +932,11 @@ router.get(
         });
       }
 
-      // =========================================
-      // 11. CALCULATE NEW EXPIRATION DATE
-      // =========================================
+      /**
+       * =====================================
+       * CALCULATE EXPIRATION
+       * =====================================
+       */
 
       const expiresAt =
         new Date();
@@ -696,9 +946,11 @@ router.get(
           selectedPlan.durationDays
       );
 
-      // =========================================
-      // 12. UPDATE FIREBASE
-      // =========================================
+      /**
+       * =====================================
+       * ACTIVATE SUBSCRIPTION
+       * =====================================
+       */
 
       await userRef.update({
         plan:
@@ -729,9 +981,11 @@ router.get(
           new Date(),
       });
 
-      // =========================================
-      // 13. LOG SUCCESS
-      // =========================================
+      /**
+       * =====================================
+       * SUCCESS LOG
+       * =====================================
+       */
 
       console.log(
         "===================================="
@@ -743,18 +997,29 @@ router.get(
 
       console.log({
         userId,
-     email: transaction.customer?.email || null,
+
+        email:
+          firebaseUser.email ||
+          transaction.customer?.email ||
+          null,
+
         plan:
           selectedPlan.tier,
+
         subscriptionType:
           selectedPlan.subscriptionType,
+
         amount:
           paidAmount,
+
         currency:
           transaction.currency,
+
         expiresAt:
           expiresAt.toISOString(),
+
         transactionId,
+
         txRef:
           transaction.tx_ref,
       });
@@ -763,9 +1028,11 @@ router.get(
         "===================================="
       );
 
-      // =========================================
-      // 14. RETURN SUCCESS
-      // =========================================
+      /**
+       * =====================================
+       * RETURN SUCCESS
+       * =====================================
+       */
 
       return res.json({
         success: true,
@@ -786,10 +1053,9 @@ router.get(
         message:
           `Zuri ${selectedPlan.tier.toUpperCase()} activated successfully.`,
       });
-
     } catch (error) {
       console.error(
-        "Payment verification error:",
+        "❌ Payment verification error:",
         error
       );
 

@@ -5,190 +5,362 @@ import os from "os";
 import path from "path";
 import { promisify } from "util";
 
-import { fal } from "@fal-ai/client";
-import OpenAI from "openai";
+import ffmpegPath from "ffmpeg-static";
 
+import {
+  lipSyncVideo,
+} from "./lipSync.js";
 import { generateMusic } from "./musicGeneration.js";
 import { generateVideo } from "./videoGeneration.js";
+import {
+  generateSpeechForVideo,
+} from "./voiceGeneration.js";
 
-const execFileAsync = promisify(execFile);
+const execFileAsync =
+  promisify(execFile);
 
-/* =====================================================
-   PATHS
-===================================================== */
+/**
+ * =====================================================
+ * PATHS
+ * =====================================================
+ */
 
-const generatedDir = path.resolve(
-  process.cwd(),
-  "generated"
-);
+const generatedDir =
+  path.resolve(
+    process.cwd(),
+    "generated"
+  );
 
-/* =====================================================
-   FFMPEG
-===================================================== */
+/**
+ * =====================================================
+ * FFMPEG
+ * =====================================================
+ */
 
 const FFMPEG_PATH =
-  process.env.FFMPEG_PATH ||
-  "C:\\Users\\USER\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-9.0-full_build\\bin\\ffmpeg.exe";
+  ffmpegPath ||
+  process.env.FFMPEG_PATH;
 
-/* =====================================================
-   ENVIRONMENT
-===================================================== */
+if (!FFMPEG_PATH) {
+  throw new Error(
+    "FFmpeg could not be located. Install ffmpeg-static or set FFMPEG_PATH."
+  );
+}
 
-const OPENAI_API_KEY = String(
-  process.env.OPENAI_API_KEY || ""
-).trim();
+console.log(
+  "🎬 FFMPEG PATH:",
+  FFMPEG_PATH
+);
 
-const FAL_KEY = String(
-  process.env.FAL_KEY ||
-    process.env.FAL_API_KEY ||
-    ""
-).trim();
-
-const openai = OPENAI_API_KEY
-  ? new OpenAI({
-      apiKey: OPENAI_API_KEY,
-    })
-  : null;
-
-/* =====================================================
-   PUBLIC BACKEND URL
-===================================================== */
+/**
+ * =====================================================
+ * PUBLIC BACKEND URL
+ * =====================================================
+ */
 
 const PUBLIC_BASE_URL =
   process.env.BACKEND_PUBLIC_URL ||
-  `http://localhost:${process.env.PORT || 3001}`;
+  `http://localhost:${
+    process.env.PORT || 3001
+  }`;
 
-/* =====================================================
-   LIP-SYNC MODEL
-===================================================== */
+/**
+ * =====================================================
+ * EXTRACT VIDEO DURATION
+ * =====================================================
+ */
 
-const LIP_SYNC_MODEL =
-  "fal-ai/kling-video/lipsync/audio-to-video";
+function extractVideoDuration(
+  prompt
+) {
+  const text =
+    String(
+      prompt || ""
+    ).trim();
 
-/* =====================================================
-   EXTRACT VIDEO DURATION
-===================================================== */
-
-function extractVideoDuration(prompt) {
-  const text = String(prompt || "").trim();
-
-  const match = text.match(
-    /\b(\d+(?:\.\d+)?)\s*(seconds?|secs?|sec|s)\b/i
-  );
+  const match =
+    text.match(
+      /\b(\d+(?:\.\d+)?)\s*(seconds?|secs?|sec|s)\b/i
+    );
 
   if (!match) {
     return 10;
   }
 
-  const requested = Number(match[1]);
+  const requested =
+    Number(match[1]);
 
-  if (!Number.isFinite(requested)) {
+  if (
+    !Number.isFinite(
+      requested
+    )
+  ) {
     return 10;
   }
 
   return Math.max(
     5,
-    Math.min(requested, 60)
+    Math.min(
+      requested,
+      60
+    )
   );
 }
 
-/* =====================================================
-   DETECT TALKING VIDEO
-===================================================== */
+/**
+ * =====================================================
+ * TALKING VIDEO DETECTION
+ * =====================================================
+ */
 
-function isTalkingVideoRequest(prompt) {
+function isTalkingVideoRequest(prompt = "") {
   const text = String(prompt || "").toLowerCase();
 
-  const talkingPattern =
-    /\b(talking|talk|speaks|speaking|speak|says|saying|narrator|narration|interview|interviewer|presenter|presentation|explains|explain|tells|telling|dialogue|conversation|voiceover|voice-over|lip.?sync|lipsync|mouth movements|talking character|talking person|person talking|woman talking|man talking|character talking|someone talking)\b/i;
+  const talkingKeywords = [
+    "talking",
+    "talk",
+    "speaking",
+    "speak",
+    "says",
+    "say",
+    "saying",
+    "shout",
+    "shouts",
+    "shouting",
+    "yell",
+    "yelled",
+    "yelling",
+    "narrator",
+    "narration",
+    "interview",
+    "presenter",
+    "presentation",
+    "explains",
+    "explain",
+    "tells",
+    "telling",
+    "voiceover",
+    "voice-over",
+    "voice over",
+    "dialogue",
+    "conversation",
+    "speaks",
+    "speaker",
+    "person talking",
+    "woman talking",
+    "man talking",
+    "character talking",
+    "someone talking",
+  ];
 
-  return talkingPattern.test(text);
+  return talkingKeywords.some((keyword) =>
+    text.includes(keyword)
+  );
 }
 
-/* =====================================================
-   DETECT AUDIO TYPE
-===================================================== */
+/**
+ * =====================================================
+ * DETECT AUDIO MODE
+ * =====================================================
+ *
+ * Possible:
+ *
+ * none
+ * music
+ * speech
+ * both
+ *
+ * Talking videos automatically receive:
+ *
+ * SPEECH + BACKGROUND MUSIC
+ */
 
-function detectAudioType(prompt) {
+function detectAudioMode(prompt = "") {
   const text = String(prompt || "")
     .trim()
     .toLowerCase();
 
-  const silencePattern =
-    /\b(silent|silence|mute|muted|no sound|no audio|without sound|without audio|remove audio|remove the sound)\b/i;
+  /**
+   * Explicit silence
+   */
 
-  if (silencePattern.test(text)) {
+  const silenceKeywords = [
+    "silent",
+    "silence",
+    "mute",
+    "muted",
+    "no sound",
+    "no audio",
+    "without sound",
+    "without audio",
+    "remove audio",
+    "remove the sound",
+  ];
+
+  if (
+    silenceKeywords.some((keyword) =>
+      text.includes(keyword)
+    )
+  ) {
     return "none";
   }
 
-  if (isTalkingVideoRequest(text)) {
+  const talking =
+    isTalkingVideoRequest(text);
+
+  /**
+   * Explicit speech only
+   */
+
+  const speechOnlyKeywords = [
+    "speech only",
+    "voice only",
+    "dialogue only",
+    "no music",
+    "without music",
+    "speech without music",
+    "voice without music",
+  ];
+
+  const speechOnly =
+    speechOnlyKeywords.some((keyword) =>
+      text.includes(keyword)
+    );
+
+  if (talking && speechOnly) {
     return "speech";
   }
 
-  const musicPattern =
-    /\b(song|music|afrobeat|afropop|rap|beat|instrumental|singing|singer|vocals?|soundtrack)\b/i;
+  /**
+   * Talking video:
+   *
+   * Speech + music
+   */
 
-  if (musicPattern.test(text)) {
+  if (talking) {
+    return "both";
+  }
+
+  /**
+   * Explicit music
+   */
+
+  const musicKeywords = [
+    "song",
+    "music",
+    "afrobeat",
+    "afrobeats",
+    "afropop",
+    "rap",
+    "beat",
+    "instrumental",
+    "soundtrack",
+    "background music",
+  ];
+
+  if (
+    musicKeywords.some((keyword) =>
+      text.includes(keyword)
+    )
+  ) {
     return "music";
   }
+
+  /**
+   * Default
+   */
 
   return "music";
 }
 
-/* =====================================================
-   FIND BEST AUDIO URL
-===================================================== */
+/**
+ * =====================================================
+ * EXTRACT AUDIO URL
+ * =====================================================
+ */
 
-function extractAudioUrl(musicResult) {
+function extractAudioUrl(
+  musicResult
+) {
   if (!musicResult) {
     return null;
   }
 
-  const candidates = [
+  const directCandidates = [
     musicResult.sourceAudioUrl,
     musicResult.source_audio_url,
+
     musicResult.audioUrl,
     musicResult.audio_url,
+
     musicResult.sourceStreamAudioUrl,
     musicResult.source_stream_audio_url,
+
     musicResult.streamAudioUrl,
     musicResult.stream_audio_url,
+  ];
 
-    musicResult.raw?.sourceAudioUrl,
-    musicResult.raw?.source_audio_url,
-    musicResult.raw?.audioUrl,
-    musicResult.raw?.audio_url,
+  for (
+    const candidate of directCandidates
+  ) {
+    if (
+      typeof candidate === "string" &&
+      candidate.startsWith("http")
+    ) {
+      return candidate;
+    }
+  }
 
-    musicResult.raw?.data?.sourceAudioUrl,
-    musicResult.raw?.data?.source_audio_url,
-    musicResult.raw?.data?.audioUrl,
-    musicResult.raw?.data?.audio_url,
+  const raw =
+    musicResult.raw;
 
-    musicResult.raw?.data?.response?.sourceAudioUrl,
-    musicResult.raw?.data?.response?.source_audio_url,
-    musicResult.raw?.data?.response?.audioUrl,
-    musicResult.raw?.data?.response?.audio_url,
+  const nestedCandidates = [
+    raw?.sourceAudioUrl,
+    raw?.source_audio_url,
 
-    musicResult.raw?.data?.response?.sunoData?.[0]
+    raw?.audioUrl,
+    raw?.audio_url,
+
+    raw?.sourceStreamAudioUrl,
+    raw?.source_stream_audio_url,
+
+    raw?.streamAudioUrl,
+    raw?.stream_audio_url,
+
+    raw?.data?.sourceAudioUrl,
+    raw?.data?.source_audio_url,
+
+    raw?.data?.audioUrl,
+    raw?.data?.audio_url,
+
+    raw?.data?.response?.sourceAudioUrl,
+    raw?.data?.response?.source_audio_url,
+
+    raw?.data?.response?.audioUrl,
+    raw?.data?.response?.audio_url,
+
+    raw?.data?.response?.sunoData?.[0]
       ?.sourceAudioUrl,
 
-    musicResult.raw?.data?.response?.sunoData?.[0]
+    raw?.data?.response?.sunoData?.[0]
       ?.audioUrl,
 
-    musicResult.raw?.data?.response?.data?.[0]
+    raw?.data?.response?.data?.[0]
       ?.sourceAudioUrl,
 
-    musicResult.raw?.data?.response?.data?.[0]
+    raw?.data?.response?.data?.[0]
       ?.audioUrl,
 
-    musicResult.raw?.data?.data?.[0]
+    raw?.data?.data?.[0]
       ?.sourceAudioUrl,
 
-    musicResult.raw?.data?.data?.[0]
+    raw?.data?.data?.[0]
       ?.audioUrl,
   ];
 
-  for (const candidate of candidates) {
+  for (
+    const candidate of nestedCandidates
+  ) {
     if (
       typeof candidate === "string" &&
       candidate.startsWith("http")
@@ -200,254 +372,11 @@ function extractAudioUrl(musicResult) {
   return null;
 }
 
-/* =====================================================
-   CREATE SPEECH SCRIPT
-===================================================== */
-
-async function createSpeechScript(prompt) {
-  if (!openai) {
-    throw new Error(
-      "OPENAI_API_KEY is missing."
-    );
-  }
-
-  console.log(
-    "🗣️ Creating dialogue for talking video..."
-  );
-
-  const response =
-    await openai.responses.create({
-      model:
-        process.env.OPENAI_TEXT_MODEL ||
-        "gpt-4o-mini",
-
-      input: [
-        {
-          role: "system",
-          content: `
-You write short natural dialogue for AI talking videos.
-
-Convert the user's video request into exactly what
-the character should SAY.
-
-Rules:
-- Return only spoken dialogue.
-- No title.
-- No quotation marks.
-- No markdown.
-- No stage directions.
-- Do not describe the scene.
-- Do not say "Here is the script".
-- Keep it natural and conversational.
-- Keep it short enough for a 10 second video unless
-  the user explicitly asks for something longer.
-- If the user asks someone to talk about Zuri,
-  make the dialogue naturally explain or promote Zuri.
-          `.trim(),
-        },
-        {
-          role: "user",
-          content: String(prompt || ""),
-        },
-      ],
-
-      max_output_tokens: 220,
-    });
-
-  const script = String(
-    response.output_text || ""
-  ).trim();
-
-  if (!script) {
-    throw new Error(
-      "No speech script was generated."
-    );
-  }
-
-  console.log(
-    "🗣️ GENERATED SCRIPT:",
-    script
-  );
-
-  return script;
-}
-
-/* =====================================================
-   GENERATE ACTUAL SPEECH AUDIO
-===================================================== */
-
-async function generateSpeech(prompt) {
-  if (!openai) {
-    throw new Error(
-      "OPENAI_API_KEY is missing."
-    );
-  }
-
-  const script =
-    await createSpeechScript(prompt);
-
-  console.log(
-    "🎙️ Generating actual spoken audio..."
-  );
-
-  const speech =
-    await openai.audio.speech.create({
-      model:
-        process.env.OPENAI_TTS_MODEL ||
-        "gpt-4o-mini-tts",
-
-      voice:
-        process.env.OPENAI_TTS_VOICE ||
-        "coral",
-
-      input: script,
-
-      response_format: "mp3",
-    });
-
-  const audioBuffer = Buffer.from(
-    await speech.arrayBuffer()
-  );
-
-  if (!audioBuffer.length) {
-    throw new Error(
-      "OpenAI returned empty speech audio."
-    );
-  }
-
-  console.log(
-    "✅ SPEECH AUDIO CREATED:",
-    audioBuffer.length,
-    "bytes"
-  );
-
-  return {
-    script,
-    audioBuffer,
-  };
-}
-
-/* =====================================================
-   KLING LIP-SYNC
-===================================================== */
-
-async function createLipSyncVideo({
-  videoUrl,
-  audioBuffer,
-}) {
-  if (!FAL_KEY) {
-    throw new Error(
-      "FAL_KEY is missing from environment variables."
-    );
-  }
-
-  if (!videoUrl) {
-    throw new Error(
-      "Lip-sync requires a video URL."
-    );
-  }
-
-  if (
-    !audioBuffer ||
-    !audioBuffer.length
-  ) {
-    throw new Error(
-      "Lip-sync requires speech audio."
-    );
-  }
-
-  fal.config({
-    credentials: FAL_KEY,
-  });
-
-  console.log(
-    "📤 Uploading speech audio to Fal..."
-  );
-
-  const audioFile = new File(
-    [audioBuffer],
-    "zuri-speech.mp3",
-    {
-      type: "audio/mpeg",
-    }
-  );
-
-  const audioUrl =
-    await fal.storage.upload(
-      audioFile
-    );
-
-  console.log(
-    "🎙️ FAL AUDIO URL:",
-    audioUrl
-  );
-
-  console.log(
-    "👄 Starting Kling lip-sync..."
-  );
-
-  const result =
-    await fal.subscribe(
-      LIP_SYNC_MODEL,
-      {
-        input: {
-          video_url: videoUrl,
-          audio_url: audioUrl,
-        },
-
-        logs: true,
-
-        onQueueUpdate(update) {
-          if (
-            update?.status ===
-            "IN_PROGRESS"
-          ) {
-            console.log(
-              "👄 Kling lip-sync processing..."
-            );
-          }
-        },
-      }
-    );
-
-  console.log(
-    "👄 FAL LIP-SYNC RESULT:"
-  );
-
-  console.dir(
-    result?.data || result,
-    {
-      depth: null,
-    }
-  );
-
-  const syncedVideoUrl =
-    result?.data?.video?.url ||
-    result?.data?.video_url ||
-    result?.video?.url ||
-    null;
-
-  if (!syncedVideoUrl) {
-    throw new Error(
-      "Kling lip-sync completed but no video URL was returned."
-    );
-  }
-
-  console.log(
-    "✅ LIP-SYNC VIDEO READY:",
-    syncedVideoUrl
-  );
-
-  return {
-    videoUrl: syncedVideoUrl,
-    audioUrl,
-    raw: result?.data || result,
-  };
-}
-
-/* =====================================================
-   DOWNLOAD REMOTE FILE
-===================================================== */
+/**
+ * =====================================================
+ * DOWNLOAD REMOTE MEDIA
+ * =====================================================
+ */
 
 async function downloadFile(
   url,
@@ -475,7 +404,8 @@ async function downloadFile(
 
     const timeout =
       setTimeout(
-        () => controller.abort(),
+        () =>
+          controller.abort(),
         timeoutMs
       );
 
@@ -486,17 +416,22 @@ async function downloadFile(
       );
 
       const response =
-        await fetch(url, {
-          method: "GET",
+        await fetch(
+          url,
+          {
+            method: "GET",
 
-          signal:
-            controller.signal,
+            signal:
+              controller.signal,
 
-          headers: {
-            Accept: "*/*",
-            "User-Agent": "Zuri/1.0",
-          },
-        });
+            headers: {
+              Accept: "*/*",
+
+              "User-Agent":
+                "Zuri/1.0",
+            },
+          }
+        );
 
       if (!response.ok) {
         throw new Error(
@@ -526,20 +461,28 @@ async function downloadFile(
       );
 
       return;
+
     } catch (error) {
-      lastError = error;
+      lastError =
+        error;
 
       console.error(
         `⚠️ Download attempt ${attempt} failed:`,
         error
       );
 
-      if (attempt < retries) {
+      if (
+        attempt < retries
+      ) {
         const delay =
           Math.min(
             2000 * attempt,
             10000
           );
+
+        console.log(
+          `⏳ Retrying in ${delay}ms...`
+        );
 
         await new Promise(
           (resolve) =>
@@ -549,8 +492,11 @@ async function downloadFile(
             )
         );
       }
+
     } finally {
-      clearTimeout(timeout);
+      clearTimeout(
+        timeout
+      );
     }
   }
 
@@ -563,32 +509,38 @@ async function downloadFile(
   );
 }
 
-/* =====================================================
-   ZURI WATERMARK
-===================================================== */
+/**
+ * =====================================================
+ * MIX MUSIC INTO LIP-SYNCED VIDEO
+ * =====================================================
+ *
+ * IMPORTANT:
+ *
+ * The lip-sync provider already returns a video
+ * containing the generated speech.
+ *
+ * Therefore:
+ *
+ * VIDEO AUDIO = SPEECH
+ *
+ * We DO NOT add speechBuffer again.
+ *
+ * We only mix:
+ *
+ *     existing speech
+ *             +
+ *     background music
+ *
+ * Speech volume:
+ *     1.0
+ *
+ * Music volume:
+ *     0.18
+ */
 
-function getWatermarkFilter() {
-  return (
-    "drawtext=" +
-    "text='ZURI':" +
-    "fontfile='C\\:/Windows/Fonts/arial.ttf':" +
-    "fontcolor=white@0.60:" +
-    "fontsize=24:" +
-    "x=w-tw-28:" +
-    "y=h-th-28:" +
-    "box=1:" +
-    "boxcolor=black@0.25:" +
-    "boxborderw=7"
-  );
-}
-
-/* =====================================================
-   PROCESS VIDEO WITH FFMPEG
-===================================================== */
-
-async function processVideo({
+async function mergeSpeechAndMusic({
   videoUrl,
-  audioUrl = null,
+  musicUrl,
 }) {
   await fs.mkdir(
     generatedDir,
@@ -608,13 +560,13 @@ async function processVideo({
   const videoPath =
     path.join(
       tempDir,
-      "video-input.mp4"
+      "lip-synced-video.mp4"
     );
 
-  const audioPath =
+  const musicPath =
     path.join(
       tempDir,
-      "audio.mp3"
+      "music.mp3"
     );
 
   const outputName =
@@ -627,8 +579,14 @@ async function processVideo({
     );
 
   try {
+    /**
+     * ==========================================
+     * DOWNLOAD LIP-SYNCED VIDEO
+     * ==========================================
+     */
+
     console.log(
-      "🎬 Downloading video..."
+      "⬇️ Downloading lip-synced video..."
     );
 
     await downloadFile(
@@ -640,51 +598,106 @@ async function processVideo({
       }
     );
 
-    const filter =
-      getWatermarkFilter();
+    /**
+     * ==========================================
+     * DOWNLOAD MUSIC
+     * ==========================================
+     */
+
+    console.log(
+      "⬇️ Downloading background music..."
+    );
+
+    await downloadFile(
+      musicUrl,
+      musicPath,
+      {
+        retries: 5,
+        timeoutMs: 180000,
+      }
+    );
+
+    /**
+     * ==========================================
+     * FFMPEG
+     * ==========================================
+     *
+     * Input 0:
+     *     Lip-synced video
+     *
+     * Input 0 audio:
+     *     Already contains speech
+     *
+     * Input 1:
+     *     Background music
+     *
+     * We mix them.
+     */
+
+    console.log(
+      "🎬🎙️🎵 Mixing speech + background music..."
+    );
 
     const ffmpegArgs = [
       "-y",
 
+      /**
+       * Lip-synced video
+       */
+
       "-i",
       videoPath,
-    ];
 
-    if (audioUrl) {
-      console.log(
-        "🎵 Downloading audio..."
-      );
+      /**
+       * Loop music
+       * so it can cover the whole video.
+       */
 
-      await downloadFile(
-        audioUrl,
-        audioPath,
-        {
-          retries: 5,
-          timeoutMs: 180000,
-        }
-      );
+      "-stream_loop",
+      "-1",
 
-      ffmpegArgs.push(
-        "-i",
-        audioPath
-      );
-    }
+      "-i",
+      musicPath,
 
-    ffmpegArgs.push(
+      /**
+       * ========================================
+       * AUDIO MIX
+       * ========================================
+       */
+
+      "-filter_complex",
+
+      "[0:a]volume=1.0[speech];" +
+      "[1:a]volume=0.18[music];" +
+      "[speech][music]" +
+      "amix=inputs=2:" +
+      "duration=first:" +
+      "dropout_transition=2" +
+      "[mixed]",
+
+      /**
+       * ========================================
+       * VIDEO
+       * ========================================
+       */
+
       "-map",
-      "0:v:0"
-    );
+      "0:v:0",
 
-    if (audioUrl) {
-      ffmpegArgs.push(
-        "-map",
-        "1:a:0"
-      );
-    }
+      /**
+       * ========================================
+       * FINAL AUDIO
+       * ========================================
+       */
 
-    ffmpegArgs.push(
-      "-vf",
-      filter,
+      "-map",
+      "[mixed]",
+
+      /**
+       * ========================================
+       * VIDEO ENCODING
+       * ========================================
+       */
 
       "-c:v",
       "libx264",
@@ -693,49 +706,42 @@ async function processVideo({
       "medium",
 
       "-crf",
-      "20"
-    );
+      "20",
 
-    if (audioUrl) {
-      ffmpegArgs.push(
-        "-c:a",
-        "aac",
+      "-pix_fmt",
+      "yuv420p",
 
-        "-b:a",
-        "192k",
+      /**
+       * ========================================
+       * AUDIO ENCODING
+       * ========================================
+       */
 
-        "-shortest"
-      );
-    } else {
-      ffmpegArgs.push(
-        "-map",
-"0:a:0?",
-"-c:a",
-"aac",
-"-b:a",
-"192k",
-"-ar",
-"44100",
-"-ac",
-"2",
-"-shortest",
-      );
-    }
+      "-c:a",
+      "aac",
 
-    ffmpegArgs.push(
+      "-b:a",
+      "192k",
+
+      /**
+       * Keep final duration equal
+       * to the video.
+       */
+
+      "-shortest",
+
+      /**
+       * Browser-friendly MP4.
+       */
+
       "-movflags",
       "+faststart",
 
-      outputPath
-    );
+      outputPath,
+    ];
 
     console.log(
-      "🎬 FFMPEG PATH:",
-      FFMPEG_PATH
-    );
-
-    console.log(
-      "🎬 FFMPEG COMMAND:"
+      "🎬 FFMPEG AUDIO MIX:"
     );
 
     console.dir(
@@ -755,12 +761,20 @@ async function processVideo({
         }
       );
 
-    if (result.stderr) {
+    if (
+      result.stderr
+    ) {
       console.log(
         "🎬 FFMPEG:",
         result.stderr
       );
     }
+
+    /**
+     * ==========================================
+     * VERIFY OUTPUT
+     * ==========================================
+     */
 
     const stat =
       await fs.stat(
@@ -780,8 +794,7 @@ async function processVideo({
       `${PUBLIC_BASE_URL}/generated/${outputName}`;
 
     console.log(
-      "✅ FINAL WATERMARKED VIDEO:",
-      outputPath
+      "✅ FINAL VIDEO WITH SPEECH + MUSIC READY"
     );
 
     console.log(
@@ -794,6 +807,7 @@ async function processVideo({
       outputName,
       finalVideoUrl,
     };
+
   } finally {
     await fs.rm(
       tempDir,
@@ -805,9 +819,199 @@ async function processVideo({
   }
 }
 
-/* =====================================================
-   MAIN VIDEO + AUDIO GENERATOR
-===================================================== */
+/**
+ * =====================================================
+ * MUSIC ONLY
+ * =====================================================
+ */
+
+async function mergeMusicOnly({
+  videoUrl,
+  musicUrl,
+}) {
+  await fs.mkdir(
+    generatedDir,
+    {
+      recursive: true,
+    }
+  );
+
+  const tempDir =
+    await fs.mkdtemp(
+      path.join(
+        os.tmpdir(),
+        "zuri-music-"
+      )
+    );
+
+  const videoPath =
+    path.join(
+      tempDir,
+      "video.mp4"
+    );
+
+  const musicPath =
+    path.join(
+      tempDir,
+      "music.mp3"
+    );
+
+  const outputName =
+    `zuri-${crypto.randomUUID()}.mp4`;
+
+  const outputPath =
+    path.join(
+      generatedDir,
+      outputName
+    );
+
+  try {
+    await downloadFile(
+      videoUrl,
+      videoPath
+    );
+
+    await downloadFile(
+      musicUrl,
+      musicPath
+    );
+
+    console.log(
+      "🎵 Adding background music..."
+    );
+
+    const args = [
+      "-y",
+
+      "-i",
+      videoPath,
+
+      "-stream_loop",
+      "-1",
+
+      "-i",
+      musicPath,
+
+      "-filter_complex",
+      "[1:a]volume=0.35[music]",
+
+      "-map",
+      "0:v:0",
+
+      "-map",
+      "[music]",
+
+      "-c:v",
+      "libx264",
+
+      "-preset",
+      "medium",
+
+      "-crf",
+      "20",
+
+      "-pix_fmt",
+      "yuv420p",
+
+      "-c:a",
+      "aac",
+
+      "-b:a",
+      "192k",
+
+      "-shortest",
+
+      "-movflags",
+      "+faststart",
+
+      outputPath,
+    ];
+
+    await execFileAsync(
+      FFMPEG_PATH,
+      args,
+      {
+        maxBuffer:
+          20 * 1024 * 1024,
+      }
+    );
+
+    const stat =
+      await fs.stat(
+        outputPath
+      );
+
+    if (
+      !stat.isFile() ||
+      stat.size === 0
+    ) {
+      throw new Error(
+        "FFmpeg produced an empty video."
+      );
+    }
+
+    const finalVideoUrl =
+      `${PUBLIC_BASE_URL}/generated/${outputName}`;
+
+    return {
+      outputPath,
+      outputName,
+      finalVideoUrl,
+    };
+
+  } finally {
+    await fs.rm(
+      tempDir,
+      {
+        recursive: true,
+        force: true,
+      }
+    );
+  }
+}
+
+/**
+ * =====================================================
+ * SPEECH ONLY
+ * =====================================================
+ *
+ * The lip-sync provider already returns a video
+ * containing the speech.
+ *
+ * Therefore there is NO reason to run FFmpeg
+ * again just to add the same speech buffer.
+ */
+
+async function returnSpeechVideo({
+  videoUrl,
+}) {
+  if (!videoUrl) {
+    throw new Error(
+      "Speech video URL is missing."
+    );
+  }
+
+  console.log(
+    "🗣️ Speech-only video ready."
+  );
+
+  return {
+    finalVideoUrl:
+      videoUrl,
+
+    outputPath:
+      null,
+
+    outputName:
+      null,
+  };
+}
+
+/**
+ * =====================================================
+ * MAIN VIDEO + AUDIO GENERATOR
+ * =====================================================
+ */
 
 export async function generateVideoWithAudio({
   prompt,
@@ -817,8 +1021,22 @@ export async function generateVideoWithAudio({
 }) {
   try {
     console.log(
-      "🎬 Starting Zuri video generation..."
+      "================================================="
     );
+
+    console.log(
+      "🎬 ZURI VIDEO + AUDIO GENERATION STARTED"
+    );
+
+    console.log(
+      "================================================="
+    );
+
+    /**
+     * ================================================
+     * DURATION
+     * ================================================
+     */
 
     const duration =
       extractVideoDuration(
@@ -831,9 +1049,31 @@ export async function generateVideoWithAudio({
       "seconds"
     );
 
-    /* ================================================
-       GENERATE VIDEO
-    ================================================= */
+    /**
+     * ================================================
+     * AUDIO MODE
+     * ================================================
+     */
+
+    const audioMode =
+      detectAudioMode(
+        prompt
+      );
+
+    console.log(
+      "🎵 AUDIO MODE:",
+      audioMode
+    );
+
+    /**
+     * ================================================
+     * GENERATE VIDEO
+     * ================================================
+     */
+
+    console.log(
+      "🎬 Generating visual video..."
+    );
 
     const videoResult =
       await generateVideo({
@@ -874,85 +1114,115 @@ export async function generateVideoWithAudio({
       originalVideoUrl
     );
 
-    /* ================================================
-       DETECT AUDIO
-    ================================================= */
+    /**
+     * ================================================
+     * SILENT VIDEO
+     * ================================================
+     */
 
-    const audioType =
-      detectAudioType(
-        prompt
-      );
-
-    console.log(
-      "🎵 SELECTED AUDIO TYPE:",
-      audioType
-    );
-
-    /* ================================================
-       SILENT VIDEO
-    ================================================= */
-
-    if (audioType === "none") {
+    if (
+      audioMode === "none"
+    ) {
       console.log(
-        "🔇 Silent video requested."
+        "🔇 SILENT VIDEO REQUESTED"
       );
-
-      const processed =
-        await processVideo({
-          videoUrl:
-            originalVideoUrl,
-
-          audioUrl:
-            null,
-        });
 
       return {
         success: true,
-        provider: "video",
+
+        provider:
+          "video",
 
         videoUrl:
-          processed.finalVideoUrl,
+          originalVideoUrl,
 
         finalVideoUrl:
-          processed.finalVideoUrl,
+          originalVideoUrl,
 
         originalVideoUrl,
 
-        audioUrl: null,
+        audioEnabled:
+          false,
 
-        audioEnabled: false,
+        audioType:
+          "none",
 
-        audioType: "none",
-
-        musicTaskId: null,
+        duration,
       };
     }
 
-    /* ================================================
-       SPEECH + LIP SYNC
-    ================================================= */
+    /**
+     * ================================================
+     * SPEECH
+     * ================================================
+     *
+     * Talking videos get:
+     *
+     * 1. AI-generated speech
+     * 2. Lip synchronization
+     *
+     * The returned lip-sync video already
+     * contains the speech audio.
+     */
 
-    if (audioType === "speech") {
+    let speech = null;
+
+    if (
+      audioMode === "speech" ||
+      audioMode === "both"
+    ) {
       console.log(
-        "🗣️ TALKING VIDEO REQUEST DETECTED"
+        "🗣️ TALKING VIDEO DETECTED"
       );
 
-      const speech =
-        await generateSpeech(
-          prompt
+      console.log(
+        "🗣️ Generating actual dialogue..."
+      );
+
+      speech =
+        await generateSpeechForVideo({
+          prompt,
+        });
+
+      if (!speech?.success) {
+        throw new Error(
+          speech?.error ||
+          "Could not generate speech."
         );
+      }
 
       console.log(
         "🗣️ SPEECH SCRIPT:",
         speech.script
       );
 
-      /*
-       * Send the generated video and REAL
-       * spoken audio to Kling.
+      if (
+        !speech.audioBuffer ||
+        !speech.audioBuffer.length
+      ) {
+        throw new Error(
+          "Speech generation returned no audio."
+        );
+      }
+
+      console.log(
+        "✅ SPEECH AUDIO GENERATED:",
+        speech.audioBuffer.length,
+        "bytes"
+      );
+
+      /**
+       * ==============================================
+       * LIP SYNC
+       * ==============================================
        */
+
+      console.log(
+        "👄 Starting lip synchronization..."
+      );
+
       const synced =
-        await createLipSyncVideo({
+        await lipSyncVideo({
           videoUrl:
             originalVideoUrl,
 
@@ -960,71 +1230,64 @@ export async function generateVideoWithAudio({
             speech.audioBuffer,
         });
 
-      /*
-       * Kling already returns the speech
-       * inside the lip-synced video.
-       *
-       * We only add the ZURI watermark.
-       */
-      const processed =
-        await processVideo({
-          videoUrl:
-            synced.videoUrl,
+      if (
+        !synced?.success ||
+        !synced?.videoUrl
+      ) {
+        throw new Error(
+          synced?.error ||
+          "Could not synchronize speech with video."
+        );
+      }
 
-          audioUrl:
-            null,
-        });
-
-      return {
-        success: true,
-
-        provider:
-          "video-with-speech",
-
-        videoUrl:
-          processed.finalVideoUrl,
-
-        finalVideoUrl:
-          processed.finalVideoUrl,
-
-        originalVideoUrl,
-
-        lipSyncedVideoUrl:
-          synced.videoUrl,
-
-        audioUrl:
-          synced.audioUrl || null,
-
-        audioEnabled:
-          true,
-
-        audioType:
-          "speech",
-
-        script:
-          speech.script,
-
-        musicTaskId:
-          null,
-      };
-    }
-
-    /* ================================================
-       MUSIC
-    ================================================= */
-
-    if (audioType === "music") {
       console.log(
-        "🎵 Generating Suno music for video..."
+        "✅ LIP-SYNC COMPLETE:",
+        synced.videoUrl
       );
 
-      const musicResult =
+      /**
+       * IMPORTANT:
+       *
+       * Kling's output is now the master video.
+       *
+       * It contains:
+       *
+       * VIDEO
+       * +
+       * SYNCHRONIZED SPEECH
+       */
+
+      speech.syncedVideoUrl =
+        synced.videoUrl;
+    }
+
+    /**
+     * ================================================
+     * BACKGROUND MUSIC
+     * ================================================
+     */
+
+    let musicResult =
+      null;
+
+    let musicUrl =
+      null;
+
+    if (
+      audioMode === "music" ||
+      audioMode === "both"
+    ) {
+      console.log(
+        "🎵 Generating instrumental background music..."
+      );
+
+      musicResult =
         await generateMusic({
           prompt,
 
           style:
             style ||
-            "African contemporary music",
+            "Cinematic contemporary African instrumental, energetic, uplifting, futuristic, premium technology commercial",
 
           instrumental:
             true,
@@ -1037,7 +1300,7 @@ export async function generateVideoWithAudio({
         });
 
       console.log(
-        "🎵 COMPLETED MUSIC RESULT:"
+        "🎵 SUNO RESULT:"
       );
 
       console.dir(
@@ -1056,12 +1319,12 @@ export async function generateVideoWithAudio({
         );
       }
 
-      const audioUrl =
+      musicUrl =
         extractAudioUrl(
           musicResult
         );
 
-      if (!audioUrl) {
+      if (!musicUrl) {
         throw new Error(
           "Suno completed but no usable audio URL was returned."
         );
@@ -1069,32 +1332,163 @@ export async function generateVideoWithAudio({
 
       console.log(
         "✅ SUNO AUDIO URL:",
-        audioUrl
+        musicUrl
+      );
+    }
+
+    /**
+     * ================================================
+     * SPEECH + MUSIC
+     * ================================================
+     */
+
+    if (
+      audioMode === "both"
+    ) {
+      console.log(
+        "🎬🎙️🎵 CREATING FINAL VIDEO:"
       );
 
-      const processed =
-        await processVideo({
-          videoUrl:
-            originalVideoUrl,
+      console.log(
+        "   VIDEO → Kling lip-sync"
+      );
 
-          audioUrl,
+      console.log(
+        "   SPEECH → Already inside lip-sync video"
+      );
+
+      console.log(
+        "   MUSIC → Mixed underneath speech"
+      );
+
+      const merged =
+        await mergeSpeechAndMusic({
+          videoUrl:
+            speech.syncedVideoUrl,
+
+          musicUrl,
         });
 
       return {
         success: true,
 
         provider:
-          "video-with-audio",
+          "video-with-speech-and-music",
 
         videoUrl:
-          processed.finalVideoUrl,
+          merged.finalVideoUrl,
 
         finalVideoUrl:
-          processed.finalVideoUrl,
+          merged.finalVideoUrl,
 
         originalVideoUrl,
 
-        audioUrl,
+        lipSyncedVideoUrl:
+          speech.syncedVideoUrl,
+
+        audioEnabled:
+          true,
+
+        audioType:
+          "speech+music",
+
+        script:
+          speech.script,
+
+        musicTaskId:
+          musicResult?.musicTaskId ||
+          null,
+
+        duration,
+
+        message:
+          "Zuri generated a video with synchronized speech and background music.",
+      };
+    }
+
+    /**
+     * ================================================
+     * SPEECH ONLY
+     * ================================================
+     */
+
+    if (
+      audioMode === "speech"
+    ) {
+      console.log(
+        "🗣️ RETURNING LIP-SYNCED SPEECH VIDEO..."
+      );
+
+      const speechVideo =
+        await returnSpeechVideo({
+          videoUrl:
+            speech.syncedVideoUrl,
+        });
+
+      return {
+        success: true,
+
+        provider:
+          "video-with-speech",
+
+        videoUrl:
+          speechVideo.finalVideoUrl,
+
+        finalVideoUrl:
+          speechVideo.finalVideoUrl,
+
+        originalVideoUrl,
+
+        lipSyncedVideoUrl:
+          speech.syncedVideoUrl,
+
+        audioEnabled:
+          true,
+
+        audioType:
+          "speech",
+
+        script:
+          speech.script,
+
+        duration,
+      };
+    }
+
+    /**
+     * ================================================
+     * MUSIC ONLY
+     * ================================================
+     */
+
+    if (
+      audioMode === "music"
+    ) {
+      console.log(
+        "🎵 Creating final music video..."
+      );
+
+      const merged =
+        await mergeMusicOnly({
+          videoUrl:
+            originalVideoUrl,
+
+          musicUrl,
+        });
+
+      return {
+        success: true,
+
+        provider:
+          "video-with-music",
+
+        videoUrl:
+          merged.finalVideoUrl,
+
+        finalVideoUrl:
+          merged.finalVideoUrl,
+
+        originalVideoUrl,
 
         audioEnabled:
           true,
@@ -1103,27 +1497,18 @@ export async function generateVideoWithAudio({
           "music",
 
         musicTaskId:
-          musicResult.musicTaskId ||
+          musicResult?.musicTaskId ||
           null,
 
-        title:
-          musicResult.title ||
-          null,
+        duration,
       };
     }
 
-    /* ================================================
-       FALLBACK
-    ================================================= */
-
-    const processed =
-      await processVideo({
-        videoUrl:
-          originalVideoUrl,
-
-        audioUrl:
-          null,
-      });
+    /**
+     * ================================================
+     * FALLBACK
+     * ================================================
+     */
 
     return {
       success: true,
@@ -1132,22 +1517,22 @@ export async function generateVideoWithAudio({
         "video",
 
       videoUrl:
-        processed.finalVideoUrl,
+        originalVideoUrl,
 
       finalVideoUrl:
-        processed.finalVideoUrl,
+        originalVideoUrl,
 
       originalVideoUrl,
-
-      audioUrl:
-        null,
 
       audioEnabled:
         false,
 
       audioType:
         "none",
+
+      duration,
     };
+
   } catch (error) {
     console.error(
       "❌ VIDEO + AUDIO GENERATION ERROR:",

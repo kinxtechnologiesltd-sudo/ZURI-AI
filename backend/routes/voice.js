@@ -47,10 +47,15 @@ router.post(
         audio.originalname || "audio.webm"
       );
 
-      formData.append(
-        "model",
-        "whisper-large-v3-turbo"
-      );
+  formData.append(
+  "model",
+  "whisper-large-v3"
+);
+
+formData.append(
+  "language",
+  "ha"
+);
 
       const response = await fetch(
         "https://api.groq.com/openai/v1/audio/transcriptions",
@@ -63,9 +68,18 @@ router.post(
         }
       );
 
-      const data = await response.json();
+    const data =
+  await response.json();
 
-      if (!response.ok) {
+console.log(
+  "🎙️ GROQ TRANSCRIPTION RESULT:",
+  {
+    text: data.text,
+    language: data.language,
+  }
+);
+
+if (!response.ok) {
         return res.status(response.status).json({
           success: false,
           message:
@@ -107,10 +121,27 @@ router.post(
 
     try {
 
-      let {
-        text,
-        voiceId,
-      } = req.body;
+let {
+  text,
+  voiceId,
+  language,
+} = req.body;
+const supportedAfricanLanguages = {
+  english: "en",
+  hausa: "ha",
+  swahili: "sw",
+  somali: "so",
+  lingala: "ln",
+  chichewa: "ny",
+  afrikaans: "af",
+};
+
+const languageCode =
+  supportedAfricanLanguages[
+    String(language || "english")
+      .toLowerCase()
+      .trim()
+  ] || "en";
 
       if (!text?.trim()) {
         return res.status(400).json({
@@ -144,8 +175,8 @@ router.post(
           },
           body: JSON.stringify({
             text,
-            model_id:
-              "eleven_multilingual_v2",
+          model_id:
+  "eleven_v3",
             voice_settings: {
               stability: 0.55,
               similarity_boost: 0.8,

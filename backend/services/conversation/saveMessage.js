@@ -40,12 +40,17 @@ export async function saveMessage(
       .doc(messageId)
       .set(message);
 
-    await conversationRef.update({
-      lastMessage: content,
-      updatedAt: FieldValue.serverTimestamp(),
-      lastMessageAt: FieldValue.serverTimestamp(),
-      messageCount: FieldValue.increment(1),
-    });
+await conversationRef.set(
+  {
+    lastMessage: content,
+    updatedAt: FieldValue.serverTimestamp(),
+    lastMessageAt: FieldValue.serverTimestamp(),
+    messageCount: FieldValue.increment(1),
+  },
+  {
+    merge: true,
+  }
+);
 
     return {
       success: true,

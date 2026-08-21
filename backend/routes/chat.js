@@ -140,6 +140,20 @@ You can assist with:
 Never invent facts.
 
 If information is unavailable, say so honestly.
+DOCUMENT & PDF GENERATION
+
+When the user asks you to create, write, generate, export, convert,
+or download a document or PDF:
+
+- Create the requested document content directly.
+- Do NOT say that you cannot create or attach PDFs.
+- Do NOT tell the user to copy the content into Word, Google Docs,
+  Notes, or another application.
+- Do NOT explain your limitations about PDF generation.
+- The backend handles PDF generation and downloading automatically.
+- Your job is to produce the actual document content.
+- Return only the useful document content unless the user asks for
+  an explanation.
 `;
 
 /**
@@ -689,11 +703,10 @@ Return ONLY the document content.
 // PDF DOCUMENT GENERATION
 // =========================================
 
-let pdfUrl = null;
-let pdfName = null;
+const pdfRequest = wantsPdfDocument(message);
 
-const pdfRequest =
-  wantsPdfDocument(message);
+let pdfName = null;
+let pdfUrl = null;
 
 if (pdfRequest) {
   try {
@@ -704,8 +717,7 @@ if (pdfRequest) {
     const replyText =
       response
         ?.choices?.[0]
-        ?.message
-        ?.content ||
+        ?.message?.content ||
       "";
 
     if (!replyText.trim()) {
@@ -735,7 +747,9 @@ if (pdfRequest) {
       "✅ PDF CREATED:",
       pdfUrl
     );
+
   } catch (error) {
+
     console.error(
       "❌ PDF CREATION FAILED:",
       error

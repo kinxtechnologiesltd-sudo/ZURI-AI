@@ -10,33 +10,52 @@ router.post("/generate", async (req, res) => {
       image = null,
       style = "",
       quality = "standard",
+      duration = 10,
     } = req.body;
 
-    if (!prompt) {
+    if (!prompt?.trim()) {
       return res.status(400).json({
         success: false,
         message: "Prompt is required.",
       });
     }
 
+    console.log(
+      "🎬 HTTP VIDEO GENERATION REQUEST"
+    );
+
+    console.log(
+      "🎬 Requested duration:",
+      duration,
+      "seconds"
+    );
+
     const result = await generateVideo({
       prompt,
       image,
       style,
       quality,
+      duration,
     });
 
-    if (!result.success) {
+    if (!result?.success) {
       return res.status(500).json(result);
     }
 
     res.json(result);
+
   } catch (error) {
-    console.error(error);
+    console.error(
+      "❌ Video generation error:",
+      error
+    );
 
     res.status(500).json({
       success: false,
-      message: error.message,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Video generation failed.",
     });
   }
 });

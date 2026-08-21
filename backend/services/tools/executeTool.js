@@ -15,8 +15,22 @@ import { weatherTool } from "./weatherTool.js";
 
 /**
  * ===========================================
+ * PRO-ONLY TOOLS
+ * ===========================================
+ *
+ * These features require Zuri Pro or Ultra.
+ */
+
+const PRO_TOOLS = new Set([
+  "image-generation",
+]);
+
+/**
+ * ===========================================
  * ULTRA-ONLY TOOLS
  * ===========================================
+ *
+ * These features require Zuri Ultra.
  */
 
 const ULTRA_TOOLS = new Set([
@@ -43,17 +57,35 @@ async function getUserPlan(userId) {
     .collection("users")
     .doc(userId);
 
-  const snapshot =
-    await userRef.get();
+  const snapshot = await userRef.get();
+
+  // =========================================
+  // CREATE MISSING PROFILE AS FREE USER
+  // =========================================
 
   if (!snapshot.exists) {
-    throw new Error(
-      "Zuri user profile was not found."
+    console.warn(
+      `⚠️ Zuri profile missing for ${userId}. Creating FREE profile.`
     );
+
+    await userRef.set(
+      {
+        uid: userId,
+        plan: "free",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      { merge: true }
+    );
+
+    return "free";
   }
 
-  const data =
-    snapshot.data();
+  const data = snapshot.data() || {};
+
+  // =========================================
+  // NORMALIZE PLAN
+  // =========================================
 
   let plan =
     data.plan === "ultra"
@@ -62,9 +94,12 @@ async function getUserPlan(userId) {
       ? "pro"
       : "free";
 
+  // =========================================
+  // CHECK SUBSCRIPTION EXPIRATION
+  // =========================================
+
   if (
-    (plan === "pro" ||
-      plan === "ultra") &&
+    (plan === "pro" || plan === "ultra") &&
     data.subscriptionExpiresAt?.toDate
   ) {
     const expiresAt =
@@ -72,11 +107,20 @@ async function getUserPlan(userId) {
         .toDate()
         .getTime();
 
-    if (
-      expiresAt <=
-      Date.now()
-    ) {
+    if (expiresAt <= Date.now()) {
+      console.log(
+        `⏰ ${plan} subscription expired for ${userId}`
+      );
+
       plan = "free";
+
+      await userRef.set(
+        {
+          plan: "free",
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
     }
   }
 
@@ -93,36 +137,79 @@ async function checkToolAccess(
   tool,
   userId
 ) {
+  /**
+   * =========================================
+   * ULTRA-ONLY
+   * =========================================
+   */
+
   if (
-    !ULTRA_TOOLS.has(tool)
+    ULTRA_TOOLS.has(tool)
   ) {
+    const plan =
+      await getUserPlan(
+        userId
+      );
+
+    if (plan !== "ultra") {
+      return {
+        allowed: false,
+        plan,
+        message:
+          `The ${tool.replace(
+            /-/g,
+            " "
+          )} feature is exclusive to Zuri Ultra. Please upgrade to Ultra to use it.`,
+      };
+    }
+
     return {
       allowed: true,
-      plan: null,
-    };
-  }
-
-  const plan =
-    await getUserPlan(
-      userId
-    );
-
-  if (plan !== "ultra") {
-    return {
-      allowed: false,
       plan,
-
-      message:
-        `The ${tool.replace(
-          /-/g,
-          " "
-        )} feature is exclusive to Zuri Ultra. Please upgrade to Ultra to use it.`,
     };
   }
+
+  /**
+   * =========================================
+   * PRO + ULTRA
+   * =========================================
+   */
+
+  if (
+    PRO_TOOLS.has(tool)
+  ) {
+    const plan =
+      await getUserPlan(
+        userId
+      );
+
+    if (
+      plan !== "pro" &&
+      plan !== "ultra"
+    ) {
+      return {
+        allowed: false,
+        plan,
+        message:
+          "Image generation is available on Zuri Pro and Zuri Ultra. Please upgrade your plan to generate images.",
+      };
+    }
+
+    return {
+      allowed: true,
+      plan,
+    };
+  }
+
+  /**
+   * =========================================
+   * FREE TOOLS
+   * =========================================
+   */
 
   return {
     allowed: true,
-    plan,
+    plan: null,
   };
 }
 
@@ -150,7 +237,7 @@ export async function executeTool(
 
   /**
    * =========================================
-   * ULTRA ACCESS CHECK
+   * PLAN ACCESS CHECK
    * =========================================
    */
 
@@ -165,7 +252,12 @@ export async function executeTool(
       `🔒 Tool blocked: ${tool} | Plan: ${access.plan}`
     );
 
-    return access.message;
+    return JSON.stringify({
+      success: false,
+      blocked: true,
+      plan: access.plan,
+      message: access.message,
+    });
   }
 
   /**
@@ -390,9 +482,19 @@ export async function executeTool(
         }
       );
 
+      if (!result?.success) {
+        return JSON.stringify({
+          success: false,
+
+          message:
+            result?.message ||
+            "Image generation failed.",
+        });
+      }
+
       return JSON.stringify({
         success:
-          result?.success,
+          true,
 
         provider:
           result?.provider,

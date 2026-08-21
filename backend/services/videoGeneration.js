@@ -3,60 +3,83 @@ import { selectVideoProvider } from "../engine/videoRouter.js";
 import { generateLumaVideo } from "../providers/luma/video.js";
 import { generateRunwayVideo } from "../providers/runway/video.js";
 
-// We'll add these providers next
-// import { generatePixVerseVideo } from "../providers/pixverse/video.js";
-// import { generatePikaVideo } from "../providers/pika/video.js";
-// import { generateHailuoVideo } from "../providers/hailuo/video.js";
+import { generateLongVideo } from "./longVideoGeneration.js";
 
 export async function generateVideo({
   prompt,
   image = null,
   style = "",
   quality = "standard",
+  duration = 10,
 }) {
-  const provider = selectVideoProvider({
-    prompt,
-    image: !!image,
-    style,
-    quality,
-  });
+  const requestedDuration =
+    Number(duration) || 10;
+
+  console.log(
+    "🎬 Requested video duration:",
+    requestedDuration,
+    "seconds"
+  );
+
+  /**
+   * =====================================================
+   * LONG VIDEO
+   * =====================================================
+   *
+   * Anything above 10 seconds goes through the
+   * long-video pipeline.
+   */
+
+  if (
+    requestedDuration > 10
+  ) {
+    console.log(
+      "🎬 LONG VIDEO MODE ENABLED"
+    );
+
+    return await generateLongVideo({
+      prompt,
+      duration:
+        requestedDuration,
+    });
+  }
+
+  /**
+   * =====================================================
+   * NORMAL VIDEO
+   * =====================================================
+   */
+
+  const provider =
+    selectVideoProvider({
+      prompt,
+      image: !!image,
+      style,
+      quality,
+    });
 
   console.log(
     "🎬 Selected video provider:",
     provider
   );
 
-  switch (provider) {
+  switch (
+    provider
+  ) {
     case "runway":
       return await generateRunwayVideo({
         prompt,
         image,
+        duration:
+          requestedDuration,
       });
 
     case "luma":
       return await generateLumaVideo({
         prompt,
+        duration:
+          requestedDuration,
       });
-
-    // We'll enable these as we integrate them
-
-    // case "pixverse":
-    //   return await generatePixVerseVideo({
-    //     prompt,
-    //     image,
-    //   });
-
-    // case "pika":
-    //   return await generatePikaVideo({
-    //     prompt,
-    //     image,
-    //   });
-
-    // case "hailuo":
-    //   return await generateHailuoVideo({
-    //     prompt,
-    //     image,
-    //   });
 
     default:
       console.log(
@@ -66,6 +89,8 @@ export async function generateVideo({
       return await generateRunwayVideo({
         prompt,
         image,
+        duration:
+          requestedDuration,
       });
   }
 }
