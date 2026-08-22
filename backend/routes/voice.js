@@ -51,12 +51,10 @@ router.post(
   "model",
   "whisper-large-v3"
 );
-
 formData.append(
-  "language",
-  "ha"
+  "model",
+  "whisper-large-v3"
 );
-
       const response = await fetch(
         "https://api.groq.com/openai/v1/audio/transcriptions",
         {
