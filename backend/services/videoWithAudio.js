@@ -7,17 +7,10 @@ import { promisify } from "util";
 
 import ffmpegPath from "ffmpeg-static";
 
-import {
-  lipSyncVideo,
-} from "./lipSync.js";
 import { generateMusic } from "./musicGeneration.js";
 import { generateVideo } from "./videoGeneration.js";
-import {
-  generateSpeechForVideo,
-} from "./voiceGeneration.js";
 
-const execFileAsync =
-  promisify(execFile);
+const execFileAsync = promisify(execFile);
 
 /**
  * =====================================================
@@ -25,11 +18,10 @@ const execFileAsync =
  * =====================================================
  */
 
-const generatedDir =
-  path.resolve(
-    process.cwd(),
-    "generated"
-  );
+const generatedDir = path.resolve(
+  process.cwd(),
+  "generated"
+);
 
 /**
  * =====================================================
@@ -70,207 +62,27 @@ const PUBLIC_BASE_URL =
  * =====================================================
  */
 
-function extractVideoDuration(
-  prompt
-) {
-  const text =
-    String(
-      prompt || ""
-    ).trim();
+function extractVideoDuration(prompt) {
+  const text = String(prompt || "").trim();
 
-  const match =
-    text.match(
-      /\b(\d+(?:\.\d+)?)\s*(seconds?|secs?|sec|s)\b/i
-    );
+  const match = text.match(
+    /\b(\d+(?:\.\d+)?)\s*(seconds?|secs?|sec|s)\b/i
+  );
 
   if (!match) {
     return 10;
   }
 
-  const requested =
-    Number(match[1]);
+  const requested = Number(match[1]);
 
-  if (
-    !Number.isFinite(
-      requested
-    )
-  ) {
+  if (!Number.isFinite(requested)) {
     return 10;
   }
 
   return Math.max(
     5,
-    Math.min(
-      requested,
-      60
-    )
+    Math.min(requested, 60)
   );
-}
-
-/**
- * =====================================================
- * TALKING VIDEO DETECTION
- * =====================================================
- */
-
-function isTalkingVideoRequest(prompt = "") {
-  const text = String(prompt || "").toLowerCase();
-
-  const talkingKeywords = [
-    "talking",
-    "talk",
-    "speaking",
-    "speak",
-    "says",
-    "say",
-    "saying",
-    "shout",
-    "shouts",
-    "shouting",
-    "yell",
-    "yelled",
-    "yelling",
-    "narrator",
-    "narration",
-    "interview",
-    "presenter",
-    "presentation",
-    "explains",
-    "explain",
-    "tells",
-    "telling",
-    "voiceover",
-    "voice-over",
-    "voice over",
-    "dialogue",
-    "conversation",
-    "speaks",
-    "speaker",
-    "person talking",
-    "woman talking",
-    "man talking",
-    "character talking",
-    "someone talking",
-  ];
-
-  return talkingKeywords.some((keyword) =>
-    text.includes(keyword)
-  );
-}
-
-/**
- * =====================================================
- * DETECT AUDIO MODE
- * =====================================================
- *
- * Possible:
- *
- * none
- * music
- * speech
- * both
- *
- * Talking videos automatically receive:
- *
- * SPEECH + BACKGROUND MUSIC
- */
-
-function detectAudioMode(prompt = "") {
-  const text = String(prompt || "")
-    .trim()
-    .toLowerCase();
-
-  /**
-   * Explicit silence
-   */
-
-  const silenceKeywords = [
-    "silent",
-    "silence",
-    "mute",
-    "muted",
-    "no sound",
-    "no audio",
-    "without sound",
-    "without audio",
-    "remove audio",
-    "remove the sound",
-  ];
-
-  if (
-    silenceKeywords.some((keyword) =>
-      text.includes(keyword)
-    )
-  ) {
-    return "none";
-  }
-
-  const talking =
-    isTalkingVideoRequest(text);
-
-  /**
-   * Explicit speech only
-   */
-
-  const speechOnlyKeywords = [
-    "speech only",
-    "voice only",
-    "dialogue only",
-    "no music",
-    "without music",
-    "speech without music",
-    "voice without music",
-  ];
-
-  const speechOnly =
-    speechOnlyKeywords.some((keyword) =>
-      text.includes(keyword)
-    );
-
-  if (talking && speechOnly) {
-    return "speech";
-  }
-
-  /**
-   * Talking video:
-   *
-   * Speech + music
-   */
-
-  if (talking) {
-    return "both";
-  }
-
-  /**
-   * Explicit music
-   */
-
-  const musicKeywords = [
-    "song",
-    "music",
-    "afrobeat",
-    "afrobeats",
-    "afropop",
-    "rap",
-    "beat",
-    "instrumental",
-    "soundtrack",
-    "background music",
-  ];
-
-  if (
-    musicKeywords.some((keyword) =>
-      text.includes(keyword)
-    )
-  ) {
-    return "music";
-  }
-
-  /**
-   * Default
-   */
-
-  return "music";
 }
 
 /**
@@ -279,9 +91,7 @@ function detectAudioMode(prompt = "") {
  * =====================================================
  */
 
-function extractAudioUrl(
-  musicResult
-) {
+function extractAudioUrl(musicResult) {
   if (!musicResult) {
     return null;
   }
@@ -300,9 +110,7 @@ function extractAudioUrl(
     musicResult.stream_audio_url,
   ];
 
-  for (
-    const candidate of directCandidates
-  ) {
+  for (const candidate of directCandidates) {
     if (
       typeof candidate === "string" &&
       candidate.startsWith("http")
@@ -311,8 +119,7 @@ function extractAudioUrl(
     }
   }
 
-  const raw =
-    musicResult.raw;
+  const raw = musicResult.raw;
 
   const nestedCandidates = [
     raw?.sourceAudioUrl,
@@ -358,9 +165,7 @@ function extractAudioUrl(
       ?.audioUrl,
   ];
 
-  for (
-    const candidate of nestedCandidates
-  ) {
+  for (const candidate of nestedCandidates) {
     if (
       typeof candidate === "string" &&
       candidate.startsWith("http")
@@ -404,8 +209,7 @@ async function downloadFile(
 
     const timeout =
       setTimeout(
-        () =>
-          controller.abort(),
+        () => controller.abort(),
         timeoutMs
       );
 
@@ -415,23 +219,19 @@ async function downloadFile(
         url
       );
 
-      const response =
-        await fetch(
-          url,
-          {
-            method: "GET",
+      const response = await fetch(
+        url,
+        {
+          method: "GET",
 
-            signal:
-              controller.signal,
+          signal: controller.signal,
 
-            headers: {
-              Accept: "*/*",
-
-              "User-Agent":
-                "Zuri/1.0",
-            },
-          }
-        );
+          headers: {
+            Accept: "*/*",
+            "User-Agent": "Zuri/1.0",
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error(
@@ -463,22 +263,18 @@ async function downloadFile(
       return;
 
     } catch (error) {
-      lastError =
-        error;
+      lastError = error;
 
       console.error(
         `⚠️ Download attempt ${attempt} failed:`,
         error
       );
 
-      if (
-        attempt < retries
-      ) {
-        const delay =
-          Math.min(
-            2000 * attempt,
-            10000
-          );
+      if (attempt < retries) {
+        const delay = Math.min(
+          2000 * attempt,
+          10000
+        );
 
         console.log(
           `⏳ Retrying in ${delay}ms...`
@@ -494,9 +290,7 @@ async function downloadFile(
       }
 
     } finally {
-      clearTimeout(
-        timeout
-      );
+      clearTimeout(timeout);
     }
   }
 
@@ -511,37 +305,26 @@ async function downloadFile(
 
 /**
  * =====================================================
- * MIX MUSIC INTO LIP-SYNCED VIDEO
+ * MERGE VIDEO + SUNO MUSIC
  * =====================================================
- *
- * IMPORTANT:
- *
- * The lip-sync provider already returns a video
- * containing the generated speech.
- *
- * Therefore:
- *
- * VIDEO AUDIO = SPEECH
- *
- * We DO NOT add speechBuffer again.
- *
- * We only mix:
- *
- *     existing speech
- *             +
- *     background music
- *
- * Speech volume:
- *     1.0
- *
- * Music volume:
- *     0.18
  */
 
-async function mergeSpeechAndMusic({
+async function mergeVideoAndMusic({
   videoUrl,
   musicUrl,
 }) {
+  if (!videoUrl) {
+    throw new Error(
+      "Video URL is missing."
+    );
+  }
+
+  if (!musicUrl) {
+    throw new Error(
+      "Music URL is missing."
+    );
+  }
+
   await fs.mkdir(
     generatedDir,
     {
@@ -554,293 +337,6 @@ async function mergeSpeechAndMusic({
       path.join(
         os.tmpdir(),
         "zuri-video-"
-      )
-    );
-
-  const videoPath =
-    path.join(
-      tempDir,
-      "lip-synced-video.mp4"
-    );
-
-  const musicPath =
-    path.join(
-      tempDir,
-      "music.mp3"
-    );
-
-  const outputName =
-    `zuri-${crypto.randomUUID()}.mp4`;
-
-  const outputPath =
-    path.join(
-      generatedDir,
-      outputName
-    );
-
-  try {
-    /**
-     * ==========================================
-     * DOWNLOAD LIP-SYNCED VIDEO
-     * ==========================================
-     */
-
-    console.log(
-      "⬇️ Downloading lip-synced video..."
-    );
-
-    await downloadFile(
-      videoUrl,
-      videoPath,
-      {
-        retries: 5,
-        timeoutMs: 180000,
-      }
-    );
-
-    /**
-     * ==========================================
-     * DOWNLOAD MUSIC
-     * ==========================================
-     */
-
-    console.log(
-      "⬇️ Downloading background music..."
-    );
-
-    await downloadFile(
-      musicUrl,
-      musicPath,
-      {
-        retries: 5,
-        timeoutMs: 180000,
-      }
-    );
-
-    /**
-     * ==========================================
-     * FFMPEG
-     * ==========================================
-     *
-     * Input 0:
-     *     Lip-synced video
-     *
-     * Input 0 audio:
-     *     Already contains speech
-     *
-     * Input 1:
-     *     Background music
-     *
-     * We mix them.
-     */
-
-    console.log(
-      "🎬🎙️🎵 Mixing speech + background music..."
-    );
-
-    const ffmpegArgs = [
-      "-y",
-
-      /**
-       * Lip-synced video
-       */
-
-      "-i",
-      videoPath,
-
-      /**
-       * Loop music
-       * so it can cover the whole video.
-       */
-
-      "-stream_loop",
-      "-1",
-
-      "-i",
-      musicPath,
-
-      /**
-       * ========================================
-       * AUDIO MIX
-       * ========================================
-       */
-
-      "-filter_complex",
-
-      "[0:a]volume=1.0[speech];" +
-      "[1:a]volume=0.18[music];" +
-      "[speech][music]" +
-      "amix=inputs=2:" +
-      "duration=first:" +
-      "dropout_transition=2" +
-      "[mixed]",
-
-      /**
-       * ========================================
-       * VIDEO
-       * ========================================
-       */
-
-      "-map",
-      "0:v:0",
-
-      /**
-       * ========================================
-       * FINAL AUDIO
-       * ========================================
-       */
-
-      "-map",
-      "[mixed]",
-
-      /**
-       * ========================================
-       * VIDEO ENCODING
-       * ========================================
-       */
-
-      "-c:v",
-      "libx264",
-
-      "-preset",
-      "medium",
-
-      "-crf",
-      "20",
-
-      "-pix_fmt",
-      "yuv420p",
-
-      /**
-       * ========================================
-       * AUDIO ENCODING
-       * ========================================
-       */
-
-      "-c:a",
-      "aac",
-
-      "-b:a",
-      "192k",
-
-      /**
-       * Keep final duration equal
-       * to the video.
-       */
-
-      "-shortest",
-
-      /**
-       * Browser-friendly MP4.
-       */
-
-      "-movflags",
-      "+faststart",
-
-      outputPath,
-    ];
-
-    console.log(
-      "🎬 FFMPEG AUDIO MIX:"
-    );
-
-    console.dir(
-      ffmpegArgs,
-      {
-        depth: null,
-      }
-    );
-
-    const result =
-      await execFileAsync(
-        FFMPEG_PATH,
-        ffmpegArgs,
-        {
-          maxBuffer:
-            20 * 1024 * 1024,
-        }
-      );
-
-    if (
-      result.stderr
-    ) {
-      console.log(
-        "🎬 FFMPEG:",
-        result.stderr
-      );
-    }
-
-    /**
-     * ==========================================
-     * VERIFY OUTPUT
-     * ==========================================
-     */
-
-    const stat =
-      await fs.stat(
-        outputPath
-      );
-
-    if (
-      !stat.isFile() ||
-      stat.size === 0
-    ) {
-      throw new Error(
-        "FFmpeg produced an empty video."
-      );
-    }
-
-    const finalVideoUrl =
-      `${PUBLIC_BASE_URL}/generated/${outputName}`;
-
-    console.log(
-      "✅ FINAL VIDEO WITH SPEECH + MUSIC READY"
-    );
-
-    console.log(
-      "🌍 FINAL VIDEO URL:",
-      finalVideoUrl
-    );
-
-    return {
-      outputPath,
-      outputName,
-      finalVideoUrl,
-    };
-
-  } finally {
-    await fs.rm(
-      tempDir,
-      {
-        recursive: true,
-        force: true,
-      }
-    );
-  }
-}
-
-/**
- * =====================================================
- * MUSIC ONLY
- * =====================================================
- */
-
-async function mergeMusicOnly({
-  videoUrl,
-  musicUrl,
-}) {
-  await fs.mkdir(
-    generatedDir,
-    {
-      recursive: true,
-    }
-  );
-
-  const tempDir =
-    await fs.mkdtemp(
-      path.join(
-        os.tmpdir(),
-        "zuri-music-"
       )
     );
 
@@ -866,21 +362,64 @@ async function mergeMusicOnly({
     );
 
   try {
+    /**
+     * ==========================================
+     * DOWNLOAD VIDEO
+     * ==========================================
+     */
+
+    console.log(
+      "⬇️ Downloading generated video..."
+    );
+
     await downloadFile(
       videoUrl,
-      videoPath
+      videoPath,
+      {
+        retries: 5,
+        timeoutMs: 180000,
+      }
+    );
+
+    /**
+     * ==========================================
+     * DOWNLOAD SUNO MUSIC
+     * ==========================================
+     */
+
+    console.log(
+      "⬇️ Downloading Suno soundtrack..."
     );
 
     await downloadFile(
       musicUrl,
-      musicPath
+      musicPath,
+      {
+        retries: 5,
+        timeoutMs: 180000,
+      }
     );
+
+    /**
+     * ==========================================
+     * FFMPEG
+     * ==========================================
+     *
+     * Video:
+     *   Generated by Runway/Luma
+     *
+     * Audio:
+     *   Generated by Suno
+     *
+     * The Suno track is looped if necessary.
+     * The final video duration follows the video.
+     */
 
     console.log(
-      "🎵 Adding background music..."
+      "🎬🎵 Combining video + Suno soundtrack..."
     );
 
-    const args = [
+    const ffmpegArgs = [
       "-y",
 
       "-i",
@@ -927,14 +466,39 @@ async function mergeMusicOnly({
       outputPath,
     ];
 
-    await execFileAsync(
-      FFMPEG_PATH,
-      args,
+    console.log(
+      "🎬 FFMPEG VIDEO + MUSIC:"
+    );
+
+    console.dir(
+      ffmpegArgs,
       {
-        maxBuffer:
-          20 * 1024 * 1024,
+        depth: null,
       }
     );
+
+    const result =
+      await execFileAsync(
+        FFMPEG_PATH,
+        ffmpegArgs,
+        {
+          maxBuffer:
+            20 * 1024 * 1024,
+        }
+      );
+
+    if (result.stderr) {
+      console.log(
+        "🎬 FFMPEG:",
+        result.stderr
+      );
+    }
+
+    /**
+     * ==========================================
+     * VERIFY FINAL FILE
+     * ==========================================
+     */
 
     const stat =
       await fs.stat(
@@ -952,6 +516,15 @@ async function mergeMusicOnly({
 
     const finalVideoUrl =
       `${PUBLIC_BASE_URL}/generated/${outputName}`;
+
+    console.log(
+      "✅ FINAL VIDEO WITH SUNO SOUND READY"
+    );
+
+    console.log(
+      "🌍 FINAL VIDEO URL:",
+      finalVideoUrl
+    );
 
     return {
       outputPath,
@@ -972,45 +545,27 @@ async function mergeMusicOnly({
 
 /**
  * =====================================================
- * SPEECH ONLY
+ * MAIN VIDEO GENERATOR
  * =====================================================
  *
- * The lip-sync provider already returns a video
- * containing the speech.
+ * Pipeline:
  *
- * Therefore there is NO reason to run FFmpeg
- * again just to add the same speech buffer.
- */
-
-async function returnSpeechVideo({
-  videoUrl,
-}) {
-  if (!videoUrl) {
-    throw new Error(
-      "Speech video URL is missing."
-    );
-  }
-
-  console.log(
-    "🗣️ Speech-only video ready."
-  );
-
-  return {
-    finalVideoUrl:
-      videoUrl,
-
-    outputPath:
-      null,
-
-    outputName:
-      null,
-  };
-}
-
-/**
- * =====================================================
- * MAIN VIDEO + AUDIO GENERATOR
- * =====================================================
+ * USER REQUEST
+ *      ↓
+ * VIDEO PROVIDER
+ *      ↓
+ * GENERATED VIDEO
+ *      ↓
+ * SUNO INSTRUMENTAL
+ *      ↓
+ * FFMPEG
+ *      ↓
+ * FINAL MP4
+ *
+ * No speech.
+ * No voice generation.
+ * No lip synchronization.
+ * No Kling.
  */
 
 export async function generateVideoWithAudio({
@@ -1025,7 +580,7 @@ export async function generateVideoWithAudio({
     );
 
     console.log(
-      "🎬 ZURI VIDEO + AUDIO GENERATION STARTED"
+      "🎬 ZURI VIDEO GENERATION STARTED"
     );
 
     console.log(
@@ -1051,23 +606,7 @@ export async function generateVideoWithAudio({
 
     /**
      * ================================================
-     * AUDIO MODE
-     * ================================================
-     */
-
-    const audioMode =
-      detectAudioMode(
-        prompt
-      );
-
-    console.log(
-      "🎵 AUDIO MODE:",
-      audioMode
-    );
-
-    /**
-     * ================================================
-     * GENERATE VIDEO
+     * GENERATE VISUAL VIDEO
      * ================================================
      */
 
@@ -1116,397 +655,87 @@ export async function generateVideoWithAudio({
 
     /**
      * ================================================
-     * SILENT VIDEO
+     * GENERATE SUNO SOUNDTRACK
      * ================================================
      */
 
-    if (
-      audioMode === "none"
-    ) {
-      console.log(
-        "🔇 SILENT VIDEO REQUESTED"
+    console.log(
+      "🎵 Generating Suno instrumental soundtrack..."
+    );
+
+    const musicResult =
+      await generateMusic({
+        prompt,
+
+        style:
+          style ||
+          "Cinematic contemporary African instrumental, energetic, uplifting, futuristic, premium production",
+
+        instrumental:
+          true,
+
+        title:
+          "Zuri Video Soundtrack",
+
+        waitForCompletion:
+          true,
+      });
+
+    console.log(
+      "🎵 SUNO RESULT:"
+    );
+
+    console.dir(
+      musicResult,
+      {
+        depth: null,
+      }
+    );
+
+    if (!musicResult?.success) {
+      throw new Error(
+        musicResult?.error ||
+        "Suno music generation failed."
+      );
+    }
+
+    const musicUrl =
+      extractAudioUrl(
+        musicResult
       );
 
-      return {
-        success: true,
+    if (!musicUrl) {
+      throw new Error(
+        "Suno completed but no usable audio URL was returned."
+      );
+    }
 
-        provider:
-          "video",
+    console.log(
+      "✅ SUNO AUDIO URL:",
+      musicUrl
+    );
 
+    /**
+     * ================================================
+     * MERGE VIDEO + MUSIC
+     * ================================================
+     */
+
+    console.log(
+      "🎬🎵 Creating final video with Suno sound..."
+    );
+
+    const merged =
+      await mergeVideoAndMusic({
         videoUrl:
           originalVideoUrl,
 
-        finalVideoUrl:
-          originalVideoUrl,
-
-        originalVideoUrl,
-
-        audioEnabled:
-          false,
-
-        audioType:
-          "none",
-
-        duration,
-      };
-    }
+        musicUrl,
+      });
 
     /**
      * ================================================
-     * SPEECH
-     * ================================================
-     *
-     * Talking videos get:
-     *
-     * 1. AI-generated speech
-     * 2. Lip synchronization
-     *
-     * The returned lip-sync video already
-     * contains the speech audio.
-     */
-
-    let speech = null;
-
-    if (
-      audioMode === "speech" ||
-      audioMode === "both"
-    ) {
-      console.log(
-        "🗣️ TALKING VIDEO DETECTED"
-      );
-
-      console.log(
-        "🗣️ Generating actual dialogue..."
-      );
-
-      speech =
-        await generateSpeechForVideo({
-          prompt,
-        });
-
-      if (!speech?.success) {
-        throw new Error(
-          speech?.error ||
-          "Could not generate speech."
-        );
-      }
-
-      console.log(
-        "🗣️ SPEECH SCRIPT:",
-        speech.script
-      );
-
-      if (
-        !speech.audioBuffer ||
-        !speech.audioBuffer.length
-      ) {
-        throw new Error(
-          "Speech generation returned no audio."
-        );
-      }
-
-      console.log(
-        "✅ SPEECH AUDIO GENERATED:",
-        speech.audioBuffer.length,
-        "bytes"
-      );
-
-      /**
-       * ==============================================
-       * LIP SYNC
-       * ==============================================
-       */
-
-      console.log(
-        "👄 Starting lip synchronization..."
-      );
-
-      const synced =
-        await lipSyncVideo({
-          videoUrl:
-            originalVideoUrl,
-
-          audioBuffer:
-            speech.audioBuffer,
-        });
-
-      if (
-        !synced?.success ||
-        !synced?.videoUrl
-      ) {
-        throw new Error(
-          synced?.error ||
-          "Could not synchronize speech with video."
-        );
-      }
-
-      console.log(
-        "✅ LIP-SYNC COMPLETE:",
-        synced.videoUrl
-      );
-
-      /**
-       * IMPORTANT:
-       *
-       * Kling's output is now the master video.
-       *
-       * It contains:
-       *
-       * VIDEO
-       * +
-       * SYNCHRONIZED SPEECH
-       */
-
-      speech.syncedVideoUrl =
-        synced.videoUrl;
-    }
-
-    /**
-     * ================================================
-     * BACKGROUND MUSIC
-     * ================================================
-     */
-
-    let musicResult =
-      null;
-
-    let musicUrl =
-      null;
-
-    if (
-      audioMode === "music" ||
-      audioMode === "both"
-    ) {
-      console.log(
-        "🎵 Generating instrumental background music..."
-      );
-
-      musicResult =
-        await generateMusic({
-          prompt,
-
-          style:
-            style ||
-            "Cinematic contemporary African instrumental, energetic, uplifting, futuristic, premium technology commercial",
-
-          instrumental:
-            true,
-
-          title:
-            "Zuri Video Soundtrack",
-
-          waitForCompletion:
-            true,
-        });
-
-      console.log(
-        "🎵 SUNO RESULT:"
-      );
-
-      console.dir(
-        musicResult,
-        {
-          depth: null,
-        }
-      );
-
-      if (
-        !musicResult?.success
-      ) {
-        throw new Error(
-          musicResult?.error ||
-          "Suno music generation failed."
-        );
-      }
-
-      musicUrl =
-        extractAudioUrl(
-          musicResult
-        );
-
-      if (!musicUrl) {
-        throw new Error(
-          "Suno completed but no usable audio URL was returned."
-        );
-      }
-
-      console.log(
-        "✅ SUNO AUDIO URL:",
-        musicUrl
-      );
-    }
-
-    /**
-     * ================================================
-     * SPEECH + MUSIC
-     * ================================================
-     */
-
-    if (
-      audioMode === "both"
-    ) {
-      console.log(
-        "🎬🎙️🎵 CREATING FINAL VIDEO:"
-      );
-
-      console.log(
-        "   VIDEO → Kling lip-sync"
-      );
-
-      console.log(
-        "   SPEECH → Already inside lip-sync video"
-      );
-
-      console.log(
-        "   MUSIC → Mixed underneath speech"
-      );
-
-      const merged =
-        await mergeSpeechAndMusic({
-          videoUrl:
-            speech.syncedVideoUrl,
-
-          musicUrl,
-        });
-
-      return {
-        success: true,
-
-        provider:
-          "video-with-speech-and-music",
-
-        videoUrl:
-          merged.finalVideoUrl,
-
-        finalVideoUrl:
-          merged.finalVideoUrl,
-
-        originalVideoUrl,
-
-        lipSyncedVideoUrl:
-          speech.syncedVideoUrl,
-
-        audioEnabled:
-          true,
-
-        audioType:
-          "speech+music",
-
-        script:
-          speech.script,
-
-        musicTaskId:
-          musicResult?.musicTaskId ||
-          null,
-
-        duration,
-
-        message:
-          "Zuri generated a video with synchronized speech and background music.",
-      };
-    }
-
-    /**
-     * ================================================
-     * SPEECH ONLY
-     * ================================================
-     */
-
-    if (
-      audioMode === "speech"
-    ) {
-      console.log(
-        "🗣️ RETURNING LIP-SYNCED SPEECH VIDEO..."
-      );
-
-      const speechVideo =
-        await returnSpeechVideo({
-          videoUrl:
-            speech.syncedVideoUrl,
-        });
-
-      return {
-        success: true,
-
-        provider:
-          "video-with-speech",
-
-        videoUrl:
-          speechVideo.finalVideoUrl,
-
-        finalVideoUrl:
-          speechVideo.finalVideoUrl,
-
-        originalVideoUrl,
-
-        lipSyncedVideoUrl:
-          speech.syncedVideoUrl,
-
-        audioEnabled:
-          true,
-
-        audioType:
-          "speech",
-
-        script:
-          speech.script,
-
-        duration,
-      };
-    }
-
-    /**
-     * ================================================
-     * MUSIC ONLY
-     * ================================================
-     */
-
-    if (
-      audioMode === "music"
-    ) {
-      console.log(
-        "🎵 Creating final music video..."
-      );
-
-      const merged =
-        await mergeMusicOnly({
-          videoUrl:
-            originalVideoUrl,
-
-          musicUrl,
-        });
-
-      return {
-        success: true,
-
-        provider:
-          "video-with-music",
-
-        videoUrl:
-          merged.finalVideoUrl,
-
-        finalVideoUrl:
-          merged.finalVideoUrl,
-
-        originalVideoUrl,
-
-        audioEnabled:
-          true,
-
-        audioType:
-          "music",
-
-        musicTaskId:
-          musicResult?.musicTaskId ||
-          null,
-
-        duration,
-      };
-    }
-
-    /**
-     * ================================================
-     * FALLBACK
+     * FINAL RESULT
      * ================================================
      */
 
@@ -1514,28 +743,37 @@ export async function generateVideoWithAudio({
       success: true,
 
       provider:
-        "video",
+        "video-with-suno-music",
 
       videoUrl:
-        originalVideoUrl,
+        merged.finalVideoUrl,
 
       finalVideoUrl:
-        originalVideoUrl,
+        merged.finalVideoUrl,
 
       originalVideoUrl,
 
       audioEnabled:
-        false,
+        true,
 
       audioType:
-        "none",
+        "music",
+
+      musicTaskId:
+        musicResult?.musicTaskId ||
+        musicResult?.taskId ||
+        musicResult?.data?.taskId ||
+        null,
 
       duration,
+
+      message:
+        "Zuri generated your video with a Suno soundtrack.",
     };
 
   } catch (error) {
     console.error(
-      "❌ VIDEO + AUDIO GENERATION ERROR:",
+      "❌ VIDEO + SUNO GENERATION ERROR:",
       error
     );
 
@@ -1543,7 +781,7 @@ export async function generateVideoWithAudio({
       success: false,
 
       provider:
-        "video-with-audio",
+        "video-with-suno-music",
 
       videoUrl:
         null,
