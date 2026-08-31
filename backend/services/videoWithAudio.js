@@ -63,25 +63,35 @@ const PUBLIC_BASE_URL =
  */
 
 function extractVideoDuration(prompt) {
-  const text = String(prompt || "").trim();
+  const text =
+    String(prompt || "").trim();
 
-  const match = text.match(
-    /\b(\d+(?:\.\d+)?)\s*(seconds?|secs?|sec|s)\b/i
-  );
+  const match =
+    text.match(
+      /\b(\d+(?:\.\d+)?)\s*(seconds?|secs?|sec|s)\b/i
+    );
 
   if (!match) {
     return 10;
   }
 
-  const requested = Number(match[1]);
+  const requested =
+    Number(match[1]);
 
-  if (!Number.isFinite(requested)) {
+  if (
+    !Number.isFinite(
+      requested
+    )
+  ) {
     return 10;
   }
 
   return Math.max(
     5,
-    Math.min(requested, 60)
+    Math.min(
+      requested,
+      60
+    )
   );
 }
 
@@ -91,7 +101,9 @@ function extractVideoDuration(prompt) {
  * =====================================================
  */
 
-function extractAudioUrl(musicResult) {
+function extractAudioUrl(
+  musicResult
+) {
   if (!musicResult) {
     return null;
   }
@@ -110,7 +122,9 @@ function extractAudioUrl(musicResult) {
     musicResult.stream_audio_url,
   ];
 
-  for (const candidate of directCandidates) {
+  for (
+    const candidate of directCandidates
+  ) {
     if (
       typeof candidate === "string" &&
       candidate.startsWith("http")
@@ -119,7 +133,8 @@ function extractAudioUrl(musicResult) {
     }
   }
 
-  const raw = musicResult.raw;
+  const raw =
+    musicResult.raw;
 
   const nestedCandidates = [
     raw?.sourceAudioUrl,
@@ -165,7 +180,9 @@ function extractAudioUrl(musicResult) {
       ?.audioUrl,
   ];
 
-  for (const candidate of nestedCandidates) {
+  for (
+    const candidate of nestedCandidates
+  ) {
     if (
       typeof candidate === "string" &&
       candidate.startsWith("http")
@@ -209,7 +226,8 @@ async function downloadFile(
 
     const timeout =
       setTimeout(
-        () => controller.abort(),
+        () =>
+          controller.abort(),
         timeoutMs
       );
 
@@ -219,19 +237,23 @@ async function downloadFile(
         url
       );
 
-      const response = await fetch(
-        url,
-        {
-          method: "GET",
+      const response =
+        await fetch(
+          url,
+          {
+            method: "GET",
 
-          signal: controller.signal,
+            signal:
+              controller.signal,
 
-          headers: {
-            Accept: "*/*",
-            "User-Agent": "Zuri/1.0",
-          },
-        }
-      );
+            headers: {
+              Accept: "*/*",
+
+              "User-Agent":
+                "Zuri/1.0",
+            },
+          }
+        );
 
       if (!response.ok) {
         throw new Error(
@@ -263,18 +285,22 @@ async function downloadFile(
       return;
 
     } catch (error) {
-      lastError = error;
+      lastError =
+        error;
 
       console.error(
         `⚠️ Download attempt ${attempt} failed:`,
         error
       );
 
-      if (attempt < retries) {
-        const delay = Math.min(
-          2000 * attempt,
-          10000
-        );
+      if (
+        attempt < retries
+      ) {
+        const delay =
+          Math.min(
+            2000 * attempt,
+            10000
+          );
 
         console.log(
           `⏳ Retrying in ${delay}ms...`
@@ -290,7 +316,9 @@ async function downloadFile(
       }
 
     } finally {
-      clearTimeout(timeout);
+      clearTimeout(
+        timeout
+      );
     }
   }
 
@@ -301,6 +329,109 @@ async function downloadFile(
         : "Unknown download error"
     }`
   );
+}
+
+/**
+ * =====================================================
+ * RUN FFMPEG WITH TIMEOUT
+ * =====================================================
+ */
+
+async function runFFmpeg(
+  args,
+  {
+    timeoutMs = 180000,
+  } = {}
+) {
+  console.log(
+    "🎬 Starting FFmpeg..."
+  );
+
+  console.dir(
+    args,
+    {
+      depth: null,
+    }
+  );
+
+  try {
+    const result =
+      await execFileAsync(
+        FFMPEG_PATH,
+        args,
+        {
+          maxBuffer:
+            50 * 1024 * 1024,
+
+          timeout:
+            timeoutMs,
+
+          killSignal:
+            "SIGKILL",
+        }
+      );
+
+    if (
+      result?.stderr
+    ) {
+      console.log(
+        "🎬 FFMPEG OUTPUT:"
+      );
+
+      console.log(
+        result.stderr
+      );
+    }
+
+    return result;
+
+  } catch (error) {
+    console.error(
+      "❌ FFMPEG PROCESS FAILED"
+    );
+
+    console.error(
+      error
+    );
+
+    if (
+      error?.stderr
+    ) {
+      console.error(
+        "❌ FFMPEG STDERR:"
+      );
+
+      console.error(
+        error.stderr
+      );
+    }
+
+    if (
+      error?.stdout
+    ) {
+      console.error(
+        "❌ FFMPEG STDOUT:"
+      );
+
+      console.error(
+        error.stdout
+      );
+    }
+
+    if (
+      error?.killed
+    ) {
+      throw new Error(
+        "FFmpeg timed out while creating the final video."
+      );
+    }
+
+    throw new Error(
+      error instanceof Error
+        ? `FFmpeg failed: ${error.message}`
+        : "FFmpeg failed while combining video and Suno audio."
+    );
+  }
 }
 
 /**
@@ -402,17 +533,66 @@ async function mergeVideoAndMusic({
 
     /**
      * ==========================================
+     * VERIFY INPUT FILES
+     * ==========================================
+     */
+
+    const videoStat =
+      await fs.stat(
+        videoPath
+      );
+
+    const musicStat =
+      await fs.stat(
+        musicPath
+      );
+
+    if (
+      !videoStat.isFile() ||
+      videoStat.size === 0
+    ) {
+      throw new Error(
+        "Downloaded Runway video is empty."
+      );
+    }
+
+    if (
+      !musicStat.isFile() ||
+      musicStat.size === 0
+    ) {
+      throw new Error(
+        "Downloaded Suno audio is empty."
+      );
+    }
+
+    console.log(
+      "✅ INPUT MEDIA VERIFIED:",
+      {
+        videoBytes:
+          videoStat.size,
+
+        musicBytes:
+          musicStat.size,
+      }
+    );
+
+    /**
+     * ==========================================
      * FFMPEG
      * ==========================================
      *
-     * Video:
-     *   Generated by Runway/Luma
+     * VIDEO:
+     *   Runway
      *
-     * Audio:
-     *   Generated by Suno
+     * AUDIO:
+     *   Suno
      *
-     * The Suno track is looped if necessary.
-     * The final video duration follows the video.
+     * No speech.
+     * No lip-sync.
+     * No Kling.
+     *
+     * The Suno soundtrack loops if necessary
+     * and the final output ends with the video.
      */
 
     console.log(
@@ -422,8 +602,16 @@ async function mergeVideoAndMusic({
     const ffmpegArgs = [
       "-y",
 
+      /**
+       * Runway video
+       */
+
       "-i",
       videoPath,
+
+      /**
+       * Loop Suno soundtrack
+       */
 
       "-stream_loop",
       "-1",
@@ -431,20 +619,47 @@ async function mergeVideoAndMusic({
       "-i",
       musicPath,
 
+      /**
+       * ========================================
+       * AUDIO FILTER
+       * ========================================
+       *
+       * Lower the soundtrack slightly so it
+       * doesn't overpower the video.
+       */
+
       "-filter_complex",
-      "[1:a]volume=0.35[music]",
+      "[1:a]volume=0.35[audio]",
+
+      /**
+       * ========================================
+       * MAP VIDEO
+       * ========================================
+       */
 
       "-map",
       "0:v:0",
 
+      /**
+       * ========================================
+       * MAP SUNO AUDIO
+       * ========================================
+       */
+
       "-map",
-      "[music]",
+      "[audio]",
+
+      /**
+       * ========================================
+       * VIDEO ENCODING
+       * ========================================
+       */
 
       "-c:v",
       "libx264",
 
       "-preset",
-      "medium",
+      "veryfast",
 
       "-crf",
       "20",
@@ -452,13 +667,27 @@ async function mergeVideoAndMusic({
       "-pix_fmt",
       "yuv420p",
 
+      /**
+       * ========================================
+       * AUDIO ENCODING
+       * ========================================
+       */
+
       "-c:a",
       "aac",
 
       "-b:a",
       "192k",
 
+      /**
+       * End when the video ends.
+       */
+
       "-shortest",
+
+      /**
+       * Browser-friendly MP4.
+       */
 
       "-movflags",
       "+faststart",
@@ -466,39 +695,23 @@ async function mergeVideoAndMusic({
       outputPath,
     ];
 
-    console.log(
-      "🎬 FFMPEG VIDEO + MUSIC:"
-    );
-
-    console.dir(
+    await runFFmpeg(
       ffmpegArgs,
       {
-        depth: null,
+        timeoutMs:
+          180000,
       }
     );
 
-    const result =
-      await execFileAsync(
-        FFMPEG_PATH,
-        ffmpegArgs,
-        {
-          maxBuffer:
-            20 * 1024 * 1024,
-        }
-      );
-
-    if (result.stderr) {
-      console.log(
-        "🎬 FFMPEG:",
-        result.stderr
-      );
-    }
-
     /**
      * ==========================================
-     * VERIFY FINAL FILE
+     * VERIFY FINAL VIDEO
      * ==========================================
      */
+
+    console.log(
+      "🔎 Verifying final video..."
+    );
 
     const stat =
       await fs.stat(
@@ -510,20 +723,36 @@ async function mergeVideoAndMusic({
       stat.size === 0
     ) {
       throw new Error(
-        "FFmpeg produced an empty video."
+        "FFmpeg completed but the final video file is empty."
       );
     }
+
+    console.log(
+      "✅ FINAL VIDEO FILE CREATED:",
+      {
+        outputPath,
+
+        size:
+          stat.size,
+      }
+    );
+
+    /**
+     * ==========================================
+     * PUBLIC URL
+     * ==========================================
+     */
 
     const finalVideoUrl =
       `${PUBLIC_BASE_URL}/generated/${outputName}`;
 
     console.log(
-      "✅ FINAL VIDEO WITH SUNO SOUND READY"
+      "🌍 FINAL VIDEO URL:",
+      finalVideoUrl
     );
 
     console.log(
-      "🌍 FINAL VIDEO URL:",
-      finalVideoUrl
+      "✅ FINAL VIDEO WITH SUNO SOUND READY"
     );
 
     return {
@@ -533,6 +762,11 @@ async function mergeVideoAndMusic({
     };
 
   } finally {
+    /**
+     * Clean temporary files after FFmpeg
+     * has finished.
+     */
+
     await fs.rm(
       tempDir,
       {
@@ -548,13 +782,13 @@ async function mergeVideoAndMusic({
  * MAIN VIDEO GENERATOR
  * =====================================================
  *
- * Pipeline:
+ * PIPELINE:
  *
  * USER REQUEST
  *      ↓
- * VIDEO PROVIDER
+ * RUNWAY / LUMA
  *      ↓
- * GENERATED VIDEO
+ * VISUAL VIDEO
  *      ↓
  * SUNO INSTRUMENTAL
  *      ↓
@@ -562,10 +796,14 @@ async function mergeVideoAndMusic({
  *      ↓
  * FINAL MP4
  *
- * No speech.
- * No voice generation.
- * No lip synchronization.
- * No Kling.
+ * IMPORTANT:
+ *
+ * ❌ No speech
+ * ❌ No voice generation
+ * ❌ No lip synchronization
+ * ❌ No Kling
+ *
+ * ✅ Suno soundtrack only
  */
 
 export async function generateVideoWithAudio({
@@ -634,6 +872,23 @@ export async function generateVideoWithAudio({
       }
     );
 
+    /**
+     * ================================================
+     * VALIDATE VIDEO
+     * ================================================
+     */
+
+    if (
+      !videoResult?.success &&
+      !videoResult?.videoUrl &&
+      !videoResult?.url
+    ) {
+      throw new Error(
+        videoResult?.error ||
+        "Video provider failed to generate a video."
+      );
+    }
+
     const originalVideoUrl =
       videoResult?.videoUrl ||
       videoResult?.url ||
@@ -644,7 +899,7 @@ export async function generateVideoWithAudio({
     if (!originalVideoUrl) {
       throw new Error(
         videoResult?.error ||
-        "Video provider did not return a video URL."
+        "Video provider did not return a usable video URL."
       );
     }
 
@@ -692,12 +947,20 @@ export async function generateVideoWithAudio({
       }
     );
 
-    if (!musicResult?.success) {
+    if (
+      !musicResult?.success
+    ) {
       throw new Error(
         musicResult?.error ||
         "Suno music generation failed."
       );
     }
+
+    /**
+     * ================================================
+     * EXTRACT SUNO AUDIO
+     * ================================================
+     */
 
     const musicUrl =
       extractAudioUrl(
@@ -717,7 +980,7 @@ export async function generateVideoWithAudio({
 
     /**
      * ================================================
-     * MERGE VIDEO + MUSIC
+     * MERGE VIDEO + SUNO
      * ================================================
      */
 
@@ -738,6 +1001,15 @@ export async function generateVideoWithAudio({
      * FINAL RESULT
      * ================================================
      */
+
+    console.log(
+      "🎉 ZURI VIDEO GENERATION COMPLETE"
+    );
+
+    console.log(
+      "🎬 FINAL VIDEO:",
+      merged.finalVideoUrl
+    );
 
     return {
       success: true,
@@ -773,7 +1045,10 @@ export async function generateVideoWithAudio({
 
   } catch (error) {
     console.error(
-      "❌ VIDEO + SUNO GENERATION ERROR:",
+      "❌ VIDEO + SUNO GENERATION ERROR:"
+    );
+
+    console.error(
       error
     );
 
