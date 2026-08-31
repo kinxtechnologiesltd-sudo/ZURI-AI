@@ -27,7 +27,6 @@ router.post(
   upload.single("file"),
   async (req, res) => {
     try {
-
       const { message } = req.body;
 
       const file = req.file;
@@ -41,21 +40,20 @@ router.post(
       let memories = [];
 
       try {
-
         if (req.body.memories) {
-
           memories = JSON.parse(
             req.body.memories
           );
-
         }
-
       } catch {}
 
       let messages;
 
-      if (image) {
+      // -----------------------------------------
+      // IMAGE
+      // -----------------------------------------
 
+      if (image) {
         const base64 =
           file.buffer.toString("base64");
 
@@ -63,74 +61,59 @@ router.post(
           `data:${file.mimetype};base64,${base64}`;
 
         messages = [
-
           {
+            role: "system",
 
-            role:"system",
-
-            content:ZURI_SYSTEM_PROMPT
-
+            content:
+              ZURI_SYSTEM_PROMPT,
           },
 
           {
+            role: "user",
 
-            role:"user",
-
-            content:[
-
+            content: [
               {
-
-                type:"text",
+                type: "text",
 
                 text:
                   message ||
-                  "Analyze this image."
-
+                  "Analyze this image.",
               },
 
               {
+                type: "image_url",
 
-                type:"image_url",
-
-                image_url:{
-
-                  url:imageUrl
-
-                }
-
-              }
-
-            ]
-
-          }
-
+                image_url: {
+                  url: imageUrl,
+                },
+              },
+            ],
+          },
         ];
-
       }
 
-      else if (pdf) {
+      // -----------------------------------------
+      // PDF
+      // -----------------------------------------
 
+      else if (pdf) {
         const pdfText =
           await extractPdfText(
             file.buffer
           );
 
         messages = [
-
           {
+            role: "system",
 
-            role:"system",
-
-            content:ZURI_SYSTEM_PROMPT
-
+            content:
+              ZURI_SYSTEM_PROMPT,
           },
 
           {
+            role: "user",
 
-            role:"user",
-
-            content:`
-
+            content: `
 QUESTION
 
 ${message}
@@ -139,38 +122,36 @@ DOCUMENT
 
 ${pdfText}
 
-`
-
-          }
-
+`,
+          },
         ];
-
       }
 
+      // -----------------------------------------
+      // NORMAL CHAT
+      // -----------------------------------------
+
       else {
-
         messages = [
-
           {
+            role: "system",
 
-            role:"system",
-
-            content:ZURI_SYSTEM_PROMPT
-
+            content:
+              ZURI_SYSTEM_PROMPT,
           },
 
           {
-
-            role:"user",
+            role: "user",
 
             content:
-              message || ""
-
-          }
-
+              message || "",
+          },
         ];
-
       }
+
+      // -----------------------------------------
+      // SSE HEADERS
+      // -----------------------------------------
 
       res.setHeader(
         "Content-Type",
@@ -187,72 +168,150 @@ ${pdfText}
         "keep-alive"
       );
 
-      const stream =
-        await runZuriStream({
+      // -----------------------------------------
+      // RUN ZURI
+      // -----------------------------------------
 
+      const result =
+        await runZuriStream({
           message,
 
-          hasImage:image,
+          hasImage: image,
 
-          hasPdf:pdf,
+          hasPdf: pdf,
 
           messages,
 
-          memories
-
+          memories,
         });
 
+      // -----------------------------------------
+      // DIRECT MEDIA RESPONSE
+      // -----------------------------------------
+      //
+      // runZuriStream() returns a normal object
+      // for image/comic/video generation.
+      //
+      // A normal object does NOT have getReader().
+      //
+      // Send media results through SSE instead
+      // of trying to treat them as a stream.
+      // -----------------------------------------
+
+      if (
+        result &&
+        typeof result === "object" &&
+        typeof result.getReader !== "function" &&
+        (
+          result.imageUrl ||
+          result.videoUrl ||
+          result.audioUrl ||
+          result.musicTaskId
+        )
+      ) {
+        console.log(
+          "🎨 STREAM DIRECT MEDIA RESPONSE:",
+          {
+            imageUrl:
+              result.imageUrl || null,
+
+            videoUrl:
+              result.videoUrl || null,
+
+            audioUrl:
+              result.audioUrl || null,
+
+            musicTaskId:
+              result.musicTaskId || null,
+          }
+        );
+
+        res.write(
+          `data:${JSON.stringify({
+            type: "media",
+
+            choices:
+              result.choices || [],
+
+            imageUrl:
+              result.imageUrl || null,
+
+            videoUrl:
+              result.videoUrl || null,
+
+            audioUrl:
+              result.audioUrl || null,
+
+            musicTaskId:
+              result.musicTaskId || null,
+
+            researchImages:
+              result.researchImages || [],
+          })}\n\n`
+        );
+
+        res.end();
+
+        return;
+      }
+
+      // -----------------------------------------
+      // NORMAL TEXT STREAM
+      // -----------------------------------------
+
+      if (
+        !result ||
+        typeof result.getReader !==
+          "function"
+      ) {
+        throw new Error(
+          "Zuri stream returned an invalid response."
+        );
+      }
+
       const reader =
-        stream.getReader();
+        result.getReader();
 
       const decoder =
         new TextDecoder();
 
       while (true) {
-
         const {
-
           done,
-
-          value
-
+          value,
         } =
-        await reader.read();
+          await reader.read();
 
-        if (done)
+        if (done) {
           break;
+        }
 
         const chunk =
           decoder.decode(value);
 
         res.write(chunk);
-
       }
 
       res.end();
 
-    }
-
-    catch(error){
-
-      console.error(error);
+    } catch (error) {
+      console.error(
+        "❌ Zuri stream error:",
+        error
+      );
 
       res.write(
-
         `event:error\ndata:${JSON.stringify({
-
-          message:error.message
-
+          message:
+            error instanceof Error
+              ? error.message
+              : "Internal server error.",
         })}\n\n`
-
       );
 
       res.end();
-
     }
-
   }
-
 );
 
 export default router;
