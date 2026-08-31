@@ -11,11 +11,11 @@ const BASE_URL =
   "https://agents.lumalabs.ai/v1";
 
 console.log(
-  "🔥 LUMA AGENTS VIDEO PROVIDER LOADED"
+  "🔥 LUMA VIDEO PROVIDER LOADED"
 );
 
 // =====================================================
-// FFmpeg
+// FFMPEG
 // =====================================================
 
 if (ffmpegPath) {
@@ -23,36 +23,52 @@ if (ffmpegPath) {
 }
 
 // =====================================================
-// GET LUMA GENERATION STATUS
+// GET LUMA API KEY
 // =====================================================
 
-export async function getLumaVideoStatus(taskId) {
+function getApiKey() {
+  const apiKey =
+    String(
+      ENV.LUMA_API_KEY || ""
+    ).trim();
+
+  if (!apiKey) {
+    throw new Error(
+      "LUMA_API_KEY is missing."
+    );
+  }
+
+  return apiKey;
+}
+
+// =====================================================
+// LUMA STATUS
+// =====================================================
+
+export async function getLumaVideoStatus(
+  taskId
+) {
   try {
     const apiKey =
-      String(ENV.LUMA_API_KEY || "").trim();
+      getApiKey();
 
-    if (!apiKey) {
-      throw new Error(
-        "LUMA_API_KEY is missing."
+    const response =
+      await fetch(
+        `${BASE_URL}/generations/${encodeURIComponent(
+          taskId
+        )}`,
+        {
+          method: "GET",
+
+          headers: {
+            Authorization:
+              `Bearer ${apiKey}`,
+
+            Accept:
+              "application/json",
+          },
+        }
       );
-    }
-
-    const response = await fetch(
-      `${BASE_URL}/generations/${encodeURIComponent(
-        taskId
-      )}`,
-      {
-        method: "GET",
-
-        headers: {
-          Authorization:
-            `Bearer ${apiKey}`,
-
-          Accept:
-            "application/json",
-        },
-      }
-    );
 
     const text =
       await response.text();
@@ -60,7 +76,8 @@ export async function getLumaVideoStatus(taskId) {
     let job;
 
     try {
-      job = JSON.parse(text);
+      job =
+        JSON.parse(text);
     } catch {
       job = {
         rawText: text,
@@ -69,7 +86,11 @@ export async function getLumaVideoStatus(taskId) {
 
     console.log(
       "🎬 LUMA STATUS:",
-      job
+      JSON.stringify(
+        job,
+        null,
+        2
+      )
     );
 
     if (!response.ok) {
@@ -83,30 +104,18 @@ export async function getLumaVideoStatus(taskId) {
           "ERROR",
 
         error:
+          job?.failure_reason ||
           job?.detail ||
           job?.message ||
           "Unable to check Luma generation.",
 
+        failureCode:
+          job?.failure_code ||
+          null,
+
         raw: job,
       };
     }
-
-    const output =
-      Array.isArray(job?.output)
-        ? job.output
-        : [];
-
-    const videoOutput =
-      output.find(
-        (item) =>
-          item?.type === "video"
-      ) ||
-      output[0] ||
-      null;
-
-    const videoUrl =
-      videoOutput?.url ||
-      null;
 
     const state =
       String(
@@ -118,9 +127,42 @@ export async function getLumaVideoStatus(taskId) {
     // =================================================
 
     if (
-      state === "completed" &&
-      videoUrl
+      state === "completed"
     ) {
+      const output =
+        Array.isArray(
+          job?.output
+        )
+          ? job.output
+          : [];
+
+      const videoOutput =
+        output.find(
+          (item) =>
+            item?.type ===
+            "video"
+        ) ||
+        output[0] ||
+        null;
+
+      const videoUrl =
+        videoOutput?.url ||
+        null;
+
+      if (!videoUrl) {
+        return {
+          success: false,
+          provider: "luma",
+          taskId,
+          status: "completed",
+
+          error:
+            "Luma completed the generation but did not return a video URL.",
+
+          raw: job,
+        };
+      }
+
       console.log(
         "✅ LUMA VIDEO READY:",
         videoUrl
@@ -128,10 +170,16 @@ export async function getLumaVideoStatus(taskId) {
 
       return {
         success: true,
+
         provider: "luma",
+
         taskId,
-        status: "completed",
+
+        status:
+          "completed",
+
         videoUrl,
+
         raw: job,
       };
     }
@@ -143,21 +191,34 @@ export async function getLumaVideoStatus(taskId) {
     if (
       state === "failed"
     ) {
+      console.error(
+        "❌ LUMA GENERATION FAILED:",
+        job
+      );
+
       return {
         success: false,
-        provider: "luma",
+
+        provider:
+          "luma",
+
         taskId,
-        status: "failed",
+
+        status:
+          "failed",
 
         error:
           job?.failure_reason ||
+          job?.detail ||
+          job?.message ||
           "Luma video generation failed.",
 
         failureCode:
           job?.failure_code ||
           null,
 
-        raw: job,
+        raw:
+          job,
       };
     }
 
@@ -167,16 +228,21 @@ export async function getLumaVideoStatus(taskId) {
 
     return {
       success: true,
-      provider: "luma",
+
+      provider:
+        "luma",
+
       taskId,
 
       status:
         job?.state ||
         "queued",
 
-      videoUrl: null,
+      videoUrl:
+        null,
 
-      raw: job,
+      raw:
+        job,
     };
 
   } catch (error) {
@@ -187,9 +253,14 @@ export async function getLumaVideoStatus(taskId) {
 
     return {
       success: false,
-      provider: "luma",
+
+      provider:
+        "luma",
+
       taskId,
-      status: "ERROR",
+
+      status:
+        "ERROR",
 
       error:
         error instanceof Error
@@ -200,7 +271,7 @@ export async function getLumaVideoStatus(taskId) {
 }
 
 // =====================================================
-// WAIT FOR LUMA VIDEO
+// WAIT FOR LUMA
 // =====================================================
 
 export async function waitForLumaVideo(
@@ -213,9 +284,15 @@ export async function waitForLumaVideo(
   if (!taskId) {
     return {
       success: false,
-      provider: "luma",
-      status: "ERROR",
-      videoUrl: null,
+
+      provider:
+        "luma",
+
+      status:
+        "ERROR",
+
+      videoUrl:
+        null,
 
       error:
         "Luma taskId is required.",
@@ -223,7 +300,7 @@ export async function waitForLumaVideo(
   }
 
   console.log(
-    "🎬 Waiting for Luma video:",
+    "🎬 WAITING FOR LUMA:",
     taskId
   );
 
@@ -233,7 +310,7 @@ export async function waitForLumaVideo(
     attempt++
   ) {
     console.log(
-      `🎬 Luma check (${attempt}/${maxAttempts})`
+      `🎬 LUMA CHECK ${attempt}/${maxAttempts}`
     );
 
     const status =
@@ -241,7 +318,9 @@ export async function waitForLumaVideo(
         taskId
       );
 
-    if (status?.videoUrl) {
+    if (
+      status?.videoUrl
+    ) {
       return status;
     }
 
@@ -255,7 +334,8 @@ export async function waitForLumaVideo(
     }
 
     if (
-      attempt < maxAttempts
+      attempt <
+      maxAttempts
     ) {
       await new Promise(
         (resolve) =>
@@ -269,10 +349,17 @@ export async function waitForLumaVideo(
 
   return {
     success: false,
-    provider: "luma",
+
+    provider:
+      "luma",
+
     taskId,
-    status: "TIMEOUT",
-    videoUrl: null,
+
+    status:
+      "TIMEOUT",
+
+    videoUrl:
+      null,
 
     error:
       "Luma video generation timed out.",
@@ -280,24 +367,39 @@ export async function waitForLumaVideo(
 }
 
 // =====================================================
-// DOWNLOAD GENERATED VIDEO
+// DOWNLOAD LUMA VIDEO
 // =====================================================
 
 async function downloadVideo(
   url,
   outputPath
 ) {
+  if (!url) {
+    throw new Error(
+      "Luma video URL is missing."
+    );
+  }
+
   console.log(
-    "⬇️ Downloading Luma video:",
-    url
+    "⬇️ Downloading Luma video..."
   );
 
   const response =
-    await fetch(url);
+    await fetch(
+      url,
+      {
+        headers: {
+          Accept:
+            "video/mp4,*/*",
+          "User-Agent":
+            "Zuri/1.0",
+        },
+      }
+    );
 
   if (!response.ok) {
     throw new Error(
-      `Failed to download Luma video: ${response.status}`
+      `Failed to download Luma video: HTTP ${response.status}`
     );
   }
 
@@ -306,13 +408,19 @@ async function downloadVideo(
       await response.arrayBuffer()
     );
 
+  if (!buffer.length) {
+    throw new Error(
+      "Luma returned an empty video."
+    );
+  }
+
   await fs.promises.writeFile(
     outputPath,
     buffer
   );
 
   console.log(
-    "✅ Luma clip downloaded:",
+    "✅ LUMA VIDEO DOWNLOADED:",
     outputPath
   );
 
@@ -320,54 +428,43 @@ async function downloadVideo(
 }
 
 // =====================================================
-// STITCH VIDEO CLIPS
+// STITCH MULTIPLE LUMA CLIPS
 // =====================================================
 
 async function stitchVideos(
   videoPaths,
   outputPath
 ) {
+  if (
+    !videoPaths.length
+  ) {
+    throw new Error(
+      "No Luma clips available for stitching."
+    );
+  }
+
+  if (
+    videoPaths.length === 1
+  ) {
+    await fs.promises.copyFile(
+      videoPaths[0],
+      outputPath
+    );
+
+    return outputPath;
+  }
+
   return new Promise(
     (resolve, reject) => {
-      if (!videoPaths.length) {
-        return reject(
-          new Error(
-            "No Luma video clips to stitch."
-          )
-        );
-      }
-
-      // -----------------------------------------------
-      // Only one clip
-      // -----------------------------------------------
-
-      if (
-        videoPaths.length === 1
-      ) {
-        return fs.copyFile(
-          videoPaths[0],
-          outputPath,
-          (error) => {
-            if (error) {
-              reject(error);
-            } else {
-              resolve(outputPath);
-            }
-          }
-        );
-      }
-
-      // -----------------------------------------------
-      // Multiple clips
-      // -----------------------------------------------
-
       const command =
         ffmpeg();
 
       for (
         const videoPath of videoPaths
       ) {
-        command.input(videoPath);
+        command.input(
+          videoPath
+        );
       }
 
       command
@@ -375,10 +472,7 @@ async function stitchVideos(
           "start",
           (commandLine) => {
             console.log(
-              "🎬 LUMA FFmpeg STITCHING:"
-            );
-
-            console.log(
+              "🎬 LUMA FFMPEG:",
               commandLine
             );
           }
@@ -388,7 +482,7 @@ async function stitchVideos(
           "progress",
           (progress) => {
             console.log(
-              "🎬 Luma stitch progress:",
+              "🎬 LUMA STITCH:",
               progress.percent
                 ? `${progress.percent.toFixed(
                     1
@@ -402,7 +496,10 @@ async function stitchVideos(
           "end",
           () => {
             console.log(
-              "✅ LUMA VIDEO STITCHING COMPLETE:",
+              "✅ LUMA CLIPS STITCHED:"
+            );
+
+            console.log(
               outputPath
             );
 
@@ -416,11 +513,13 @@ async function stitchVideos(
           "error",
           (error) => {
             console.error(
-              "❌ Luma FFmpeg stitching failed:",
+              "❌ LUMA STITCH ERROR:",
               error
             );
 
-            reject(error);
+            reject(
+              error
+            );
           }
         )
 
@@ -446,31 +545,28 @@ async function generateLumaClip({
   image = null,
 }) {
   const apiKey =
-    String(
-      ENV.LUMA_API_KEY || ""
-    ).trim();
+    getApiKey();
 
-  if (!apiKey) {
-    throw new Error(
-      "LUMA_API_KEY is missing."
-    );
-  }
-
-  // -----------------------------------------------
-  // Luma individual clip duration
-  // -----------------------------------------------
-
-  const numericDuration =
-    Number(duration);
-
+  // Luma Ray 3.2 currently accepts
+  // 5s or 10s video durations.
   const safeDuration =
-    numericDuration <= 5
+    Number(duration) <= 5
       ? "5s"
       : "10s";
 
   console.log(
-    "🎬 LUMA INDIVIDUAL CLIP:",
-    safeDuration
+    "🎬 LUMA CLIP REQUEST:",
+    {
+      duration:
+        safeDuration,
+
+      aspectRatio,
+
+      resolution,
+
+      hasImage:
+        !!image,
+    }
   );
 
   const body = {
@@ -493,16 +589,20 @@ async function generateLumaClip({
     },
   };
 
+  // ===================================================
+  // IMAGE → VIDEO
+  //
+  // Current Luma Agents API uses video.start_frame.
+  // ===================================================
+
   if (image) {
-    body.image_ref = [
-      {
-        url: image,
-      },
-    ];
+    body.video.start_frame = {
+      url: image,
+    };
   }
 
   console.log(
-    "🎬 LUMA AGENTS REQUEST:"
+    "🎬 LUMA REQUEST BODY:"
   );
 
   console.dir(
@@ -516,7 +616,8 @@ async function generateLumaClip({
     await fetch(
       `${BASE_URL}/generations`,
       {
-        method: "POST",
+        method:
+          "POST",
 
         headers: {
           Authorization:
@@ -530,7 +631,9 @@ async function generateLumaClip({
         },
 
         body:
-          JSON.stringify(body),
+          JSON.stringify(
+            body
+          ),
       }
     );
 
@@ -544,7 +647,8 @@ async function generateLumaClip({
       JSON.parse(text);
   } catch {
     job = {
-      rawText: text,
+      rawText:
+        text,
     };
   }
 
@@ -562,14 +666,17 @@ async function generateLumaClip({
 
   if (!response.ok) {
     throw new Error(
+      job?.failure_reason ||
       job?.detail ||
-        job?.message ||
-        "Luma video generation failed."
+      job?.message ||
+      "Luma video generation failed."
     );
   }
 
   const taskId =
-    job?.id || null;
+    job?.id ||
+    job?.generation_id ||
+    null;
 
   if (!taskId) {
     throw new Error(
@@ -593,12 +700,13 @@ async function generateLumaClip({
   ) {
     throw new Error(
       completed?.error ||
-        "Luma clip failed to generate."
+      "Luma video generation failed."
     );
   }
 
   return {
-    success: true,
+    success:
+      true,
 
     provider:
       "luma",
@@ -609,7 +717,7 @@ async function generateLumaClip({
       completed.videoUrl,
 
     duration:
-      numericDuration <= 5
+      Number(duration) <= 5
         ? 5
         : 10,
 
@@ -619,62 +727,123 @@ async function generateLumaClip({
 }
 
 // =====================================================
-// CREATE LUMA VIDEO
+// CALCULATE VALID LUMA CLIPS
+// =====================================================
 //
-// Supports:
-// 2–60 seconds.
+// Luma accepts only 5s or 10s per generation.
 //
-// Luma generates individual clips.
-// FFmpeg stitches multiple clips together.
+// Examples:
+//
+// 5  → [5]
+// 10 → [10]
+// 15 → [10,5]
+// 20 → [10,10]
+// 25 → [10,10,5]
+// 30 → [10,10,10]
+//
+// =====================================================
+
+function calculateClipDurations(
+  requestedDuration
+) {
+  const clips = [];
+
+  let remaining =
+    requestedDuration;
+
+  while (
+    remaining > 0
+  ) {
+    if (
+      remaining >= 10
+    ) {
+      clips.push(10);
+
+      remaining -= 10;
+
+      continue;
+    }
+
+    if (
+      remaining >= 5
+    ) {
+      clips.push(5);
+
+      remaining -= 5;
+
+      continue;
+    }
+
+    // Remaining 1–4 seconds.
+    //
+    // We cannot create a 1–4 second Luma
+    // clip, so extend the final clip by
+    // up to 5 seconds.
+    //
+    // Example:
+    // 12 seconds → 10 + 5
+    // 17 seconds → 10 + 5 + 5
+    // Actual result may be slightly longer
+    // than requested.
+
+    if (
+      clips.length
+    ) {
+      clips[
+        clips.length - 1
+      ] += 5;
+
+      remaining = 0;
+
+      break;
+    }
+
+    clips.push(5);
+
+    remaining = 0;
+  }
+
+  return clips;
+}
+
+// =====================================================
+// GENERATE LUMA VIDEO
 // =====================================================
 
 export async function generateLumaVideo({
   prompt,
-  aspectRatio = "16:9",
-  duration = "10s",
-  resolution = "720p",
-  image = null,
+
+  aspectRatio =
+    "16:9",
+
+  duration =
+    "10s",
+
+  resolution =
+    "720p",
+
+  image =
+    null,
 }) {
-  let temporaryDirectory = null;
+  let temporaryDirectory =
+    null;
 
   try {
-    // =================================================
-    // VALIDATE API KEY
-    // =================================================
-
-    const apiKey =
-      String(
-        ENV.LUMA_API_KEY || ""
-      ).trim();
-
-    if (!apiKey) {
-      throw new Error(
-        "LUMA_API_KEY is missing."
-      );
-    }
-
-    console.log(
-      "🔑 LUMA API KEY LOADED:",
-      Boolean(apiKey)
-    );
-
-    console.log(
-      "🔑 LUMA KEY FORMAT:",
-      apiKey.startsWith(
-        "luma-api-"
-      )
-        ? "Agents API"
-        : "Unknown"
-    );
+    getApiKey();
 
     // =================================================
-    // NORMALIZE REQUESTED DURATION
+    // NORMALIZE DURATION
     // =================================================
 
     let requestedDuration =
       Number(
-        String(duration)
-          .replace(/s/gi, "")
+        String(
+          duration
+        )
+          .replace(
+            /s/gi,
+            ""
+          )
           .trim()
       );
 
@@ -691,27 +860,28 @@ export async function generateLumaVideo({
         requestedDuration
       );
 
-    // Zuri supports 2–60 seconds.
-    if (
-      requestedDuration < 2
-    ) {
-      requestedDuration = 2;
-    }
-
-    if (
-      requestedDuration > 60
-    ) {
-      requestedDuration = 60;
-    }
+    requestedDuration =
+      Math.max(
+        2,
+        Math.min(
+          requestedDuration,
+          60
+        )
+      );
 
     console.log(
       "🎬 ZURI LUMA VIDEO REQUEST:",
       {
         requestedDuration,
+
         prompt,
+
         aspectRatio,
+
         resolution,
-        hasImage: !!image,
+
+        hasImage:
+          !!image,
       }
     );
 
@@ -719,52 +889,10 @@ export async function generateLumaVideo({
     // CALCULATE CLIPS
     // =================================================
 
-    const clipDurations = [];
-
-    let remaining =
-      requestedDuration;
-
-    while (
-      remaining > 0
-    ) {
-      let clipDuration =
-        Math.min(
-          10,
-          remaining
-        );
-
-      // -----------------------------------------------
-      // Luma supports 5s or 10s individual clips.
-      //
-      // If the final remainder is below 5 seconds,
-      // make the previous clip absorb the remainder.
-      // -----------------------------------------------
-
-      if (
-        clipDuration < 5
-      ) {
-        if (
-          clipDurations.length
-        ) {
-          clipDurations[
-            clipDurations.length - 1
-          ] += clipDuration;
-
-          remaining = 0;
-
-          break;
-        }
-
-        clipDuration = 5;
-      }
-
-      clipDurations.push(
-        clipDuration
+    const clipDurations =
+      calculateClipDurations(
+        requestedDuration
       );
-
-      remaining -=
-        clipDuration;
-    }
 
     console.log(
       "🎬 LUMA CLIPS REQUIRED:",
@@ -776,20 +904,26 @@ export async function generateLumaVideo({
     // =================================================
 
     if (
-      clipDurations.length === 1
+      clipDurations.length ===
+      1
     ) {
       const clip =
         await generateLumaClip({
           prompt,
+
           aspectRatio,
+
           duration:
             clipDurations[0],
+
           resolution,
+
           image,
         });
 
       return {
-        success: true,
+        success:
+          true,
 
         provider:
           "luma",
@@ -805,7 +939,7 @@ export async function generateLumaVideo({
           "SUCCEEDED",
 
         duration:
-          requestedDuration,
+          clipDurations[0],
 
         clipCount:
           1,
@@ -817,12 +951,12 @@ export async function generateLumaVideo({
           null,
 
         message:
-          `Zuri generated a ${requestedDuration}-second Luma video.`,
+          `Zuri generated a ${clipDurations[0]}-second Luma video.`,
       };
     }
 
     // =================================================
-    // MULTI-CLIP GENERATION
+    // MULTI-CLIP
     // =================================================
 
     temporaryDirectory =
@@ -833,17 +967,11 @@ export async function generateLumaVideo({
         )
       );
 
-    console.log(
-      "📁 LUMA TEMP DIRECTORY:",
-      temporaryDirectory
-    );
+    const videoPaths =
+      [];
 
-    const videoPaths = [];
-    const taskIds = [];
-
-    // =================================================
-    // GENERATE EACH CLIP
-    // =================================================
+    const taskIds =
+      [];
 
     for (
       let index = 0;
@@ -857,16 +985,8 @@ export async function generateLumaVideo({
       console.log(
         `🎬 GENERATING LUMA CLIP ${
           index + 1
-        }/${clipDurations.length}`,
-        {
-          duration:
-            clipDuration,
-        }
+        }/${clipDurations.length}`
       );
-
-      // -----------------------------------------------
-      // Give every clip context about its position.
-      // -----------------------------------------------
 
       const clipPrompt = `
 ${prompt}
@@ -875,21 +995,23 @@ This is scene ${
         index + 1
       } of ${
         clipDurations.length
-      } in one continuous cinematic video.
+      }.
 
-Maintain the same characters, world,
-visual identity, lighting, camera language,
-color palette and overall cinematic style.
+Maintain continuity with the overall concept.
 
-Scene ${
-        index + 1
-      } should feel like a natural continuation
+Keep the same:
+- characters
+- environment
+- visual identity
+- lighting
+- camera language
+- color palette
+- cinematic style
+
+Make this scene feel like a natural continuation
 of the previous scene.
 
-Do not add unnecessary text overlays.
-
-Keep the visual storytelling coherent
-and suitable for a premium technology commercial.
+Do not add text overlays unless explicitly requested.
 `;
 
       const clip =
@@ -904,8 +1026,6 @@ and suitable for a premium technology commercial.
 
           resolution,
 
-          // Only use supplied source image
-          // for the first clip.
           image:
             index === 0
               ? image
@@ -948,40 +1068,19 @@ and suitable for a premium technology commercial.
         "zuri-final.mp4"
       );
 
-    console.log(
-      "🎬 STITCHING LUMA VIDEO:",
-      {
-        clips:
-          videoPaths.length,
-
-        requestedDuration,
-      }
-    );
-
     await stitchVideos(
       videoPaths,
       finalVideoPath
     );
 
-    // =================================================
-    // FINAL RESULT
-    // =================================================
-
     console.log(
-      "✅ ZURI LONG LUMA VIDEO COMPLETE:",
-      {
-        duration:
-          requestedDuration,
-
-        clips:
-          videoPaths.length,
-
-        finalVideoPath,
-      }
+      "✅ ZURI LUMA VIDEO COMPLETE:",
+      finalVideoPath
     );
 
     return {
-      success: true,
+      success:
+        true,
 
       provider:
         "luma",
@@ -1000,8 +1099,6 @@ and suitable for a premium technology commercial.
       clipCount:
         videoPaths.length,
 
-      // Your chat route can move this
-      // into /generated.
       videoPath:
         finalVideoPath,
 
@@ -1014,12 +1111,13 @@ and suitable for a premium technology commercial.
 
   } catch (error) {
     console.error(
-      "❌ Luma generation error:",
+      "❌ LUMA VIDEO GENERATION ERROR:",
       error
     );
 
     return {
-      success: false,
+      success:
+        false,
 
       provider:
         "luma",
@@ -1027,10 +1125,29 @@ and suitable for a premium technology commercial.
       status:
         "ERROR",
 
+      videoUrl:
+        null,
+
+      videoPath:
+        null,
+
       error:
         error instanceof Error
           ? error.message
           : "Luma video generation failed.",
     };
+
+  } finally {
+    // =================================================
+    // IMPORTANT:
+    //
+    // Do NOT delete the temporary directory here
+    // when returning videoPath for a multi-clip video.
+    //
+    // The caller needs the generated file first.
+    //
+    // For now we intentionally leave cleanup to the
+    // final video pipeline.
+    // =================================================
   }
 }
