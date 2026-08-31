@@ -3,10 +3,45 @@ import { ENV } from "../../config/environment.js";
 const BASE_URL =
   "https://api.sunoapi.org";
 
+/**
+ * =====================================================
+ * GENERATE SUNO MUSIC
+ * =====================================================
+ *
+ * This provider supports both:
+ *
+ * 1. Normal Zuri music generation
+ * 2. Video soundtrack generation
+ *
+ * IMPORTANT:
+ *
+ * The caller decides whether the generated audio
+ * should contain vocals or be instrumental.
+ *
+ * Video generation MUST pass:
+ *
+ *     instrumental: true
+ *
+ * Normal music generation may pass:
+ *
+ *     instrumental: false
+ *
+ * Do NOT hardcode instrumental here.
+ */
+
 export async function generateSunoMusic({
   prompt,
+  style = "",
+  instrumental = false,
+  title = "Zuri Creation",
 }) {
   try {
+    /**
+     * ================================================
+     * ENVIRONMENT CHECK
+     * ================================================
+     */
+
     if (!ENV.SUNO_API_KEY) {
       throw new Error(
         "SUNO_API_KEY is missing."
@@ -19,6 +54,12 @@ export async function generateSunoMusic({
       );
     }
 
+    /**
+     * ================================================
+     * CLEAN PROMPT
+     * ================================================
+     */
+
     const cleanPrompt =
       String(prompt || "")
         .trim()
@@ -30,14 +71,95 @@ export async function generateSunoMusic({
       );
     }
 
+    /**
+     * ================================================
+     * NORMALIZE VALUES
+     * ================================================
+     */
+
+    const isInstrumental =
+      Boolean(instrumental);
+
+    const cleanStyle =
+      String(style || "")
+        .trim()
+        .slice(0, 300);
+
+    const cleanTitle =
+      String(title || "Zuri Creation")
+        .trim()
+        .slice(0, 100);
+
+    /**
+     * ================================================
+     * SUNO REQUEST BODY
+     * ================================================
+     *
+     * For video generation:
+     *
+     * instrumental = true
+     *
+     * This prevents Suno from creating vocals
+     * for the video's soundtrack.
+     */
+
     const requestBody = {
       prompt: cleanPrompt,
+
       customMode: false,
-      instrumental: false,
-      model: "V4_5",
+
+      instrumental:
+        isInstrumental,
+
+      model:
+        "V4_5",
+
       callBackUrl:
         ENV.SUNO_CALLBACK_URL,
     };
+
+    /**
+     * ================================================
+     * LOG IMPORTANT REQUEST DETAILS
+     * ================================================
+     */
+
+    console.log(
+      "================================================="
+    );
+
+    console.log(
+      "🎵 SUNO GENERATION REQUEST"
+    );
+
+    console.log(
+      "================================================="
+    );
+
+    console.log(
+      "🎵 Prompt:",
+      cleanPrompt
+    );
+
+    console.log(
+      "🎵 Instrumental:",
+      isInstrumental
+    );
+
+    console.log(
+      "🎵 Style:",
+      cleanStyle || "(none)"
+    );
+
+    console.log(
+      "🎵 Title:",
+      cleanTitle
+    );
+
+    console.log(
+      "🎵 Callback URL:",
+      ENV.SUNO_CALLBACK_URL
+    );
 
     console.log(
       "🎵 SUNO REQUEST BODY:"
@@ -51,6 +173,12 @@ export async function generateSunoMusic({
       )
     );
 
+    /**
+     * ================================================
+     * ABORT CONTROLLER
+     * ================================================
+     */
+
     const controller =
       new AbortController();
 
@@ -60,6 +188,12 @@ export async function generateSunoMusic({
       }, 30000);
 
     try {
+      /**
+       * ============================================
+       * SEND REQUEST
+       * ============================================
+       */
+
       console.log(
         "🎵 Sending request to Suno..."
       );
@@ -88,6 +222,12 @@ export async function generateSunoMusic({
           }
         );
 
+      /**
+       * ============================================
+       * READ RESPONSE
+       * ============================================
+       */
+
       const job =
         await response.json();
 
@@ -103,31 +243,70 @@ export async function generateSunoMusic({
         )
       );
 
+      /**
+       * ============================================
+       * HTTP FAILURE
+       * ============================================
+       */
+
       if (!response.ok) {
+        console.error(
+          "❌ Suno HTTP request failed:",
+          response.status
+        );
+
         return {
           success: false,
-          provider: "suno",
+
+          provider:
+            "suno",
+
           error:
             job?.msg ||
             job?.message ||
-            "Suno music generation failed.",
-          raw: job,
+            `Suno music generation failed with HTTP ${response.status}.`,
+
+          raw:
+            job,
         };
       }
+
+      /**
+       * ============================================
+       * SUNO API ERROR
+       * ============================================
+       */
 
       if (
         job?.code !== undefined &&
         job.code !== 200
       ) {
+        console.error(
+          "❌ Suno rejected generation request:",
+          job
+        );
+
         return {
           success: false,
-          provider: "suno",
+
+          provider:
+            "suno",
+
           error:
             job?.msg ||
+            job?.message ||
             "Suno rejected the request.",
-          raw: job,
+
+          raw:
+            job,
         };
       }
+
+      /**
+       * ============================================
+       * EXTRACT TASK ID
+       * ============================================
+       */
 
       const taskId =
         job?.data?.taskId ||
@@ -137,38 +316,95 @@ export async function generateSunoMusic({
         null;
 
       if (!taskId) {
+        console.error(
+          "❌ Suno returned no task ID:",
+          job
+        );
+
         return {
           success: false,
-          provider: "suno",
+
+          provider:
+            "suno",
+
           error:
             "Suno responded successfully but did not return a task ID.",
-          raw: job,
+
+          raw:
+            job,
         };
       }
 
+      /**
+       * ============================================
+       * SUCCESS
+       * ============================================
+       */
+
+      console.log(
+        "✅ SUNO TASK CREATED:"
+      );
+
+      console.log(
+        "🎵 Task ID:",
+        taskId
+      );
+
+      console.log(
+        "🎵 Instrumental:",
+        isInstrumental
+      );
+
       return {
         success: true,
-        provider: "suno",
+
+        provider:
+          "suno",
+
         taskId,
+
         status:
           job?.data?.status ||
           "PENDING",
-        raw: job,
+
+        audioUrl:
+          job?.data?.audioUrl ||
+          job?.data?.audio_url ||
+          null,
+
+        title:
+          cleanTitle,
+
+        instrumental:
+          isInstrumental,
+
+        raw:
+          job,
       };
 
     } finally {
-      clearTimeout(timeout);
+      clearTimeout(
+        timeout
+      );
     }
 
   } catch (error) {
+    /**
+     * ================================================
+     * ERROR HANDLING
+     * ================================================
+     */
+
     console.error(
-      "Suno generation error:",
+      "❌ Suno generation error:",
       error
     );
 
     return {
       success: false,
-      provider: "suno",
+
+      provider:
+        "suno",
 
       error:
         error?.name ===
