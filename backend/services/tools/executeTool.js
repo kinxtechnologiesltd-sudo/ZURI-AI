@@ -514,125 +514,148 @@ export async function executeTool(
      * =======================================
      */
 
-    case "comic-generation": {
-      console.log(
-        "🎨 COMIC TOOL EXECUTING:"
-      );
+   case "comic-generation": {
+  console.log(
+    "🎨 COMIC TOOL EXECUTING:"
+  );
 
-      const result =
-        await generateFalComic({
-          prompt:
-            context?.message ||
-            step?.query ||
-            "",
+  const result =
+    await generateFalComic({
+      prompt:
+        context?.message ||
+        step?.query ||
+        "",
 
-          image:
-            context?.image ||
-            null,
+      image:
+        context?.image ||
+        null,
 
-          aspectRatio:
-            context?.aspectRatio ||
-            "4:3",
-        });
+      aspectRatio:
+        context?.aspectRatio ||
+        "4:3",
+    });
 
-      console.log(
-        "🎨 COMIC RESULT:",
-        {
-          success:
-            result?.success,
+  console.log(
+    "🎨 COMIC RESULT:",
+    {
+      success:
+        result?.success,
 
-          provider:
-            result?.provider,
+      provider:
+        result?.provider,
 
-          type:
-            result?.type,
+      type:
+        result?.type,
 
-          hasBuffer:
-            !!result?.buffer,
-
-          hasImageUrl:
-            !!result?.imageUrl,
-        }
-      );
-
-      /**
-       * =====================================
-       * GENERATION FAILURE
-       * =====================================
-       */
-
-      if (!result?.success) {
-        return JSON.stringify({
-          success: false,
-
-          message:
-            result?.message ||
-            "Comic generation failed.",
-        });
-      }
-
-      /**
-       * =====================================
-       * BUFFER CHECK
-       * =====================================
-       */
-
-      if (!result?.buffer) {
-        console.error(
-          "❌ Comic buffer is missing."
-        );
-
-        return JSON.stringify({
-          success: false,
-
-          message:
-            "Comic was generated but the watermarked image buffer is missing.",
-        });
-      }
-
-      /**
-       * =====================================
-       * WATERMARKED BUFFER → DATA URL
-       * =====================================
-       */
-
-      const base64 =
-        result.buffer.toString(
-          "base64"
-        );
-
-      const watermarkedImageUrl =
-        `data:image/png;base64,${base64}`;
-
-      console.log(
-        "✅ Watermarked comic prepared for Zuri."
-      );
-
-      /**
-       * =====================================
-       * RETURN COMIC
-       * =====================================
-       */
-
-      return JSON.stringify({
-        success: true,
-
-        provider:
-          result.provider ||
-          "fal",
-
-        model:
-          result.model ||
-          "fal-ai/flux/schnell",
-
-        type:
-          result.type ||
-          "comic",
-
-        imageUrl:
-          watermarkedImageUrl,
-      });
+      hasImageUrl:
+        !!result?.imageUrl,
     }
+  );
+
+  /**
+   * =====================================
+   * GENERATION FAILURE
+   * =====================================
+   */
+
+  if (!result?.success) {
+    console.error(
+      "❌ Comic generation failed:",
+      result?.error ||
+        result?.message
+    );
+
+    return JSON.stringify({
+      success: false,
+
+      provider:
+        result?.provider ||
+        "fal",
+
+      type:
+        "comic",
+
+      imageUrl:
+        null,
+
+      message:
+        result?.error ||
+        result?.message ||
+        "Comic generation failed.",
+    });
+  }
+
+  /**
+   * =====================================
+   * FAL IMAGE URL
+   * =====================================
+   *
+   * The Fal provider already returns a
+   * usable image URL.
+   *
+   * Do NOT require a buffer.
+   * Do NOT convert it to base64.
+   */
+
+  const imageUrl =
+    result?.imageUrl ||
+    null;
+
+  if (!imageUrl) {
+    console.error(
+      "❌ Comic generation succeeded but no image URL was returned."
+    );
+
+    return JSON.stringify({
+      success: false,
+
+      provider:
+        result?.provider ||
+        "fal",
+
+      type:
+        "comic",
+
+      imageUrl:
+        null,
+
+      message:
+        "Comic was generated but no image URL was returned.",
+    });
+  }
+
+  console.log(
+    "✅ COMIC IMAGE READY FOR FRONTEND:"
+  );
+
+  console.log(
+    "🖼️ IMAGE URL:",
+    imageUrl
+  );
+
+  /**
+   * =====================================
+   * RETURN COMIC TO ZURI ENGINE
+   * =====================================
+   */
+
+  return JSON.stringify({
+    success: true,
+
+    provider:
+      result?.provider ||
+      "fal",
+
+    model:
+      result?.model ||
+      "fal-ai/flux-2-lora-gallery/digital-comic-art",
+
+    type:
+      "comic",
+
+    imageUrl,
+  });
+}
 
     /**
      * =======================================
