@@ -7,6 +7,8 @@ import * as DocumentPicker from "expo-document-picker";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -80,81 +82,33 @@ function GenerationStatus({
   }[type];
 
   return (
-    <View
-      style={{
-        marginHorizontal: 12,
-        marginBottom: 10,
-        padding: 14,
-        borderRadius: 16,
-        backgroundColor: "#171717",
-        borderWidth: 1,
-        borderColor: "#2a2a2a",
-      }}
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 22,
-            marginRight: 10,
-          }}
-        >
+    <View style={styles.generationStatus}>
+      <View style={styles.generationHeader}>
+        <Text style={styles.generationIcon}>
           {status.icon}
         </Text>
 
-        <View style={{ flex: 1 }}>
-          <Text
-            style={{
-              color: "#fff",
-              fontSize: 14,
-              fontWeight: "700",
-            }}
-          >
+        <View style={styles.generationTextContainer}>
+          <Text style={styles.generationTitle}>
             {status.title}
           </Text>
 
-          <Text
-            style={{
-              color: "#999",
-              fontSize: 12,
-              marginTop: 3,
-            }}
-          >
+          <Text style={styles.generationDescription}>
             {status.text}
           </Text>
         </View>
       </View>
 
-      <View
-        style={{
-          height: 4,
-          marginTop: 12,
-          borderRadius: 4,
-          backgroundColor: "#303030",
-          overflow: "hidden",
-        }}
-      >
-        <View
-          style={{
-            width: "65%",
-            height: "100%",
-            backgroundColor: "#fff",
-            borderRadius: 4,
-          }}
-        />
+      <View style={styles.generationProgressTrack}>
+        <View style={styles.generationProgress} />
       </View>
     </View>
   );
 }
 
 export default function Chat() {
-  const [mediaGenerationType, setMediaGenerationType] = useState<
-    "image" | "music" | "video" | null
-  >(null);
+  const [mediaGenerationType, setMediaGenerationType] =
+    useState<"image" | "music" | "video" | null>(null);
 
   const {
     currentConversationId,
@@ -178,7 +132,9 @@ export default function Chat() {
     responseLength,
   } = usePreferences();
 
-  const [showVoiceOptions, setShowVoiceOptions] = useState(false);
+  const [showVoiceOptions, setShowVoiceOptions] =
+    useState(false);
+
   const { isProUser } = useUserPlan();
 
   useEffect(() => {
@@ -264,11 +220,6 @@ export default function Chat() {
           data
         );
 
-        console.log(
-          "Transcription result:",
-          data
-        );
-
         if (data.text) {
           const transcribedText =
             data.text.trim();
@@ -277,6 +228,7 @@ export default function Chat() {
 
           if (transcribedText) {
             setIsVoiceMode(true);
+
             await sendMessage(
               transcribedText,
               true
@@ -324,7 +276,6 @@ export default function Chat() {
 
     let speechText = text;
 
-    // Pronunciation fixes
     speechText = speechText
       .replace(/\bKINX\b/g, "Kings")
       .replace(/\bKinx\b/g, "Kings");
@@ -460,13 +411,11 @@ export default function Chat() {
   };
 
   const speakZuriReply = async (text: string) => {
-    // FREE USERS
     if (!isProUser) {
       speakBrowserVoice(text);
       return;
     }
 
-    // PRO USERS
     try {
       const voiceId =
         voiceGender === "female"
@@ -507,7 +456,8 @@ export default function Chat() {
       const audioUrl =
         URL.createObjectURL(audioBlob);
 
-      const audio = new Audio(audioUrl);
+      const audio =
+        new Audio(audioUrl);
 
       audio.onended = () => {
         URL.revokeObjectURL(audioUrl);
@@ -1062,7 +1012,7 @@ export default function Chat() {
 
       const wantsImage =
         !selectedFile &&
-        /\b(generate|create|make|draw)\b.*\b(image|picture|photo|artwork|illustration)\b/i.test(
+        /\b(generate|create|make|draw)\b[\s\S]{0,80}\b(image|picture|photo|artwork|illustration)\b/i.test(
           prompt
         );
 
@@ -1082,7 +1032,7 @@ export default function Chat() {
           );
 
         console.log(
-          "🎨 OpenAI image generated successfully."
+          "🎨 Image generated successfully."
         );
 
         const permanentImageUrl =
@@ -1261,6 +1211,7 @@ export default function Chat() {
       setMediaGenerationType(
         null
       );
+      setIsVoiceMode(false);
     }
   }
 
@@ -1274,28 +1225,23 @@ export default function Chat() {
         <ScrollView
           ref={scrollViewRef}
           style={styles.chatArea}
-          showsVerticalScrollIndicator={
-            true
-          }
+          showsVerticalScrollIndicator={true}
+          keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => {
-            if (messages.length > 1) {
-              scrollViewRef.current?.scrollToEnd(
-                {
-                  animated: true,
-                }
-              );
+            if (messages.length > 0) {
+              scrollViewRef.current?.scrollToEnd({
+                animated: true,
+              });
             }
           }}
-          contentContainerStyle={{
-            paddingBottom: 150,
-            paddingTop: 10,
-          }}
+          contentContainerStyle={[
+            styles.chatContent,
+            isMobile && styles.mobileChatContent,
+          ]}
         >
           {messages.length === 0 && (
             <EmptyChat
-              onSelectPrompt={(
-                prompt: string
-              ) =>
+              onSelectPrompt={(prompt: string) =>
                 setInput(prompt)
               }
             />
@@ -1305,337 +1251,338 @@ export default function Chat() {
             (message, index) => (
               <MessageBubble
                 key={index}
-                sender={
-                  message.sender
-                }
+                sender={message.sender}
                 text={message.text}
-                imageUrl={
-                  message.imageUrl
-                }
-                videoUrl={
-                  message.videoUrl
-                }
-                audioUrl={
-                  message.audioUrl
-                }
+                imageUrl={message.imageUrl}
+                videoUrl={message.videoUrl}
+                audioUrl={message.audioUrl}
                 researchImages={
-                  message.researchImages ||
-                  []
+                  message.researchImages || []
                 }
               />
             )
           )}
 
           {loading && (
-            <View
-              style={
-                styles.loadingBox
-              }
-            >
+            <View style={styles.loadingBox}>
               <ActivityIndicator
                 size="large"
                 color="#553504"
               />
 
-              <Text
-                style={
-                  styles.loadingText
-                }
-              >
-                {mediaGenerationType ===
-                "video"
-                  ? "🎬 Zuri is generating your video..."
-                  : mediaGenerationType ===
-                    "image"
-                  ? "🎨 Zuri is creating your image..."
-                  : mediaGenerationType ===
-                    "music"
-                  ? "🎵 Zuri is creating your music..."
-                  : "Zuri is thinking..."}
-              </Text>
-
-              {mediaGenerationType && (
-                <Text
-                  style={
-                    styles.mediaWaitingText
-                  }
-                >
-                  This may take a little while.
-                  Please wait...
+              <View style={styles.loadingTextContainer}>
+                <Text style={styles.loadingText}>
+                  {mediaGenerationType ===
+                  "video"
+                    ? "🎬 Zuri is generating your video..."
+                    : mediaGenerationType ===
+                      "image"
+                    ? "🎨 Zuri is creating your image..."
+                    : mediaGenerationType ===
+                      "music"
+                    ? "🎵 Zuri is creating your music..."
+                    : "Zuri is thinking..."}
                 </Text>
-              )}
+
+                {mediaGenerationType && (
+                  <Text
+                    style={
+                      styles.mediaWaitingText
+                    }
+                  >
+                    This may take a little while.
+                    Please wait...
+                  </Text>
+                )}
+              </View>
             </View>
           )}
         </ScrollView>
 
-        <Text
-          style={styles.disclaimer}
+        <KeyboardAvoidingView
+          style={styles.composerKeyboard}
+          behavior={
+            Platform.OS === "ios"
+              ? "padding"
+              : "height"
+          }
+          keyboardVerticalOffset={0}
         >
-          Zuri can make mistakes. Check important
-          information.
-        </Text>
+          <Text style={styles.disclaimer}>
+            Zuri can make mistakes. Check important
+            information.
+          </Text>
 
-        {selectedFile && (
-          <View
-            style={
-              styles.filePreview
-            }
-          >
+          {selectedFile && (
             <View
-              style={
-                styles.fileInfo
-              }
+              style={[
+                styles.filePreview,
+                isMobile &&
+                  styles.mobileFilePreview,
+              ]}
             >
-              <Text
-                style={
-                  styles.fileIcon
-                }
-              >
-                {selectedFile.mimeType?.startsWith(
-                  "image/"
-                )
-                  ? "🖼️"
-                  : "📄"}
-              </Text>
+              <View style={styles.fileInfo}>
+                <Text style={styles.fileIcon}>
+                  {selectedFile.mimeType?.startsWith(
+                    "image/"
+                  )
+                    ? "🖼️"
+                    : "📄"}
+                </Text>
 
-              <Text
-                style={
-                  styles.fileName
+                <Text
+                  style={styles.fileName}
+                  numberOfLines={1}
+                >
+                  {selectedFile.name}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={() =>
+                  setSelectedFile(null)
                 }
-                numberOfLines={1}
+                style={styles.removeFileButton}
+                activeOpacity={0.7}
               >
-                {selectedFile.name}
-              </Text>
+                <Text
+                  style={styles.removeFileText}
+                >
+                  ×
+                </Text>
+              </TouchableOpacity>
             </View>
+          )}
 
-            <TouchableOpacity
-              onPress={() =>
-                setSelectedFile(
-                  null
-                )
-              }
-              style={
-                styles.removeFileButton
-              }
-            >
-              <Text
-                style={
-                  styles.removeFileText
-                }
-              >
-                ×
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {generationType && (
-          <GenerationStatus
-            type={generationType}
-          />
-        )}
-
-        <View
-          style={[
-            styles.inputContainer,
-            isMobile &&
-              styles.mobileInputContainer,
-          ]}
-        >
-          <TouchableOpacity
-            style={[
-              styles.attachButton,
-              isMobile &&
-                styles.mobileAttachButton,
-            ]}
-            onPress={
-              pickDocument
-            }
-          >
-            <Text
-              style={
-                styles.attachText
-              }
-            >
-              +
-            </Text>
-          </TouchableOpacity>
-
-          <TextInput
-            value={input}
-            onChangeText={
-              setInput
-            }
-            placeholder="Ask Zuri anything..."
-            placeholderTextColor="#64748B"
-            style={[
-              styles.input,
-              isMobile &&
-                styles.mobileInput,
-            ]}
-            onSubmitEditing={() =>
-              sendMessage()
-            }
-            returnKeyType="send"
-            blurOnSubmit={false}
-          />
-
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              isMobile &&
-                styles.mobileSendButton,
-            ]}
-            onPress={() =>
-              sendMessage()
-            }
-          >
-            <Text
-              style={
-                styles.sendText
-              }
-            >
-              ↑
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.micButton,
-              isMobile &&
-                styles.mobileMicButton,
-              isRecording &&
-                styles.micButtonRecording,
-            ]}
-            onPress={
-              toggleRecording
-            }
-          >
-            <View
-              style={
-                styles.voiceIcon
-              }
-            >
-              <View
-                style={[
-                  styles.voiceLine,
-                  styles.voiceLineShort,
-                ]}
-              />
-              <View
-                style={[
-                  styles.voiceLine,
-                  styles.voiceLineTall,
-                ]}
-              />
-              <View
-                style={[
-                  styles.voiceLine,
-                  styles.voiceLineMedium,
-                ]}
-              />
-              <View
-                style={[
-                  styles.voiceLine,
-                  styles.voiceLineTall,
-                ]}
-              />
-              <View
-                style={[
-                  styles.voiceLine,
-                  styles.voiceLineShort,
-                ]}
-              />
-            </View>
-          </TouchableOpacity>
+          {generationType && (
+            <GenerationStatus
+              type={generationType}
+            />
+          )}
 
           <View
             style={[
-              styles.voiceSettingsWrapper,
+              styles.inputContainer,
               isMobile &&
-                styles.mobileVoiceSettingsWrapper,
+                styles.mobileInputContainer,
             ]}
           >
+            {/* ATTACH */}
             <TouchableOpacity
               style={[
-                styles.voiceSettingsButton,
+                styles.attachButton,
                 isMobile &&
-                  styles.mobileVoiceSettingsButton,
+                  styles.mobileAttachButton,
               ]}
-              onPress={() =>
-                setShowVoiceOptions(
-                  !showVoiceOptions
-                )
-              }
+              onPress={pickDocument}
+              activeOpacity={0.75}
             >
-              <Text
-                style={
-                  styles.voiceSettingsIcon
-                }
-              >
-                ⌄
+              <Text style={styles.attachText}>
+                +
               </Text>
             </TouchableOpacity>
 
-            {showVoiceOptions && (
-              <View
-                style={
-                  styles.voiceOptions
+            {/* TEXT INPUT */}
+            <TextInput
+              value={input}
+              onChangeText={setInput}
+              placeholder="Ask Zuri anything..."
+              placeholderTextColor="#64748B"
+              style={[
+                styles.input,
+                isMobile &&
+                  styles.mobileInput,
+              ]}
+              multiline
+              textAlignVertical="center"
+              autoCapitalize="sentences"
+              autoCorrect={true}
+              onFocus={() => {
+                setTimeout(() => {
+                  scrollViewRef.current?.scrollToEnd(
+                    {
+                      animated: true,
+                    }
+                  );
+                }, 150);
+              }}
+              onSubmitEditing={() => {
+                if (Platform.OS !== "ios") {
+                  sendMessage();
                 }
-              >
-                <TouchableOpacity
-                  style={[
-                    styles.voiceOption,
-                    voiceGender ===
-                      "female" &&
-                      styles.voiceOptionActive,
-                  ]}
-                  onPress={() => {
-                    setVoiceGender(
-                      "female"
-                    );
-                    setShowVoiceOptions(
-                      false
-                    );
-                  }}
-                >
-                  <Text
-                    style={
-                      styles.voiceOptionText
-                    }
-                  >
-                    Feminine voice
-                  </Text>
-                </TouchableOpacity>
+              }}
+              returnKeyType={
+                Platform.OS === "ios"
+                  ? "default"
+                  : "send"
+              }
+              blurOnSubmit={false}
+            />
 
-                <TouchableOpacity
+            {/* SEND / MICROPHONE */}
+            {input.trim().length > 0 ? (
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  isMobile &&
+                    styles.mobileSendButton,
+                ]}
+                onPress={() =>
+                  sendMessage()
+                }
+                activeOpacity={0.8}
+              >
+                <Text
                   style={[
-                    styles.voiceOption,
-                    voiceGender ===
-                      "male" &&
-                      styles.voiceOptionActive,
+                    styles.sendText,
+                    isMobile &&
+                      styles.mobileSendText,
                   ]}
-                  onPress={() => {
-                    setVoiceGender(
-                      "male"
-                    );
-                    setShowVoiceOptions(
-                      false
-                    );
-                  }}
                 >
-                  <Text
-                    style={
-                      styles.voiceOptionText
-                    }
-                  >
-                    Masculine voice
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                  ↑
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[
+                  styles.micButton,
+                  isMobile &&
+                    styles.mobileMicButton,
+                  isRecording &&
+                    styles.micButtonRecording,
+                ]}
+                onPress={
+                  toggleRecording
+                }
+                activeOpacity={0.8}
+              >
+                <View
+                  style={styles.voiceIcon}
+                >
+                  <View
+                    style={[
+                      styles.voiceLine,
+                      styles.voiceLineShort,
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.voiceLine,
+                      styles.voiceLineTall,
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.voiceLine,
+                      styles.voiceLineMedium,
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.voiceLine,
+                      styles.voiceLineTall,
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.voiceLine,
+                      styles.voiceLineShort,
+                    ]}
+                  />
+                </View>
+              </TouchableOpacity>
             )}
+
+            {/* VOICE SETTINGS */}
+            <View
+              style={[
+                styles.voiceSettingsWrapper,
+                isMobile &&
+                  styles.mobileVoiceSettingsWrapper,
+              ]}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.voiceSettingsButton,
+                  isMobile &&
+                    styles.mobileVoiceSettingsButton,
+                ]}
+                onPress={() =>
+                  setShowVoiceOptions(
+                    !showVoiceOptions
+                  )
+                }
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={
+                    styles.voiceSettingsIcon
+                  }
+                >
+                  ⌄
+                </Text>
+              </TouchableOpacity>
+
+              {showVoiceOptions && (
+                <View
+                  style={
+                    styles.voiceOptions
+                  }
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.voiceOption,
+                      voiceGender ===
+                        "female" &&
+                        styles.voiceOptionActive,
+                    ]}
+                    onPress={() => {
+                      setVoiceGender(
+                        "female"
+                      );
+                      setShowVoiceOptions(
+                        false
+                      );
+                    }}
+                  >
+                    <Text
+                      style={
+                        styles.voiceOptionText
+                      }
+                    >
+                      Feminine voice
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.voiceOption,
+                      voiceGender ===
+                        "male" &&
+                        styles.voiceOptionActive,
+                    ]}
+                    onPress={() => {
+                      setVoiceGender(
+                        "male"
+                      );
+                      setShowVoiceOptions(
+                        false
+                      );
+                    }}
+                  >
+                    <Text
+                      style={
+                        styles.voiceOptionText
+                      }
+                    >
+                      Masculine voice
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </View>
 
       {isDesktop && <RightPanel />}
@@ -1644,68 +1591,260 @@ export default function Chat() {
 }
 
 const styles = StyleSheet.create({
-  voiceSettingsWrapper: {
-    position: "relative",
-    marginRight: 10,
-    zIndex: 100,
+  /* ==========================
+     APP
+  ========================== */
+
+  appContainer: {
+    flex: 1,
+    flexDirection: "row",
   },
 
-  mobileVoiceSettingsWrapper: {
-    marginRight: 0,
+  root: {
+    flex: 1,
+    height: "100%",
+    minHeight: 0,
+    backgroundColor: "#081216",
+    paddingHorizontal: 12,
   },
 
-  voiceSettingsButton: {
-    width: 32,
-    height: 48,
-    justifyContent: "center",
+  /* ==========================
+     CHAT
+  ========================== */
+
+  chatArea: {
+    flex: 1,
+    minHeight: 0,
+    width: "100%",
+    maxWidth: 900,
+    alignSelf: "center",
+    paddingHorizontal: 20,
+  },
+
+  chatContent: {
+    paddingTop: 10,
+    paddingBottom: 150,
+  },
+
+  mobileChatContent: {
+    paddingTop: 6,
+    paddingBottom: 110,
+  },
+
+  /* ==========================
+     GENERATION STATUS
+  ========================== */
+
+  generationStatus: {
+    marginHorizontal: 12,
+    marginBottom: 10,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: "#171717",
+    borderWidth: 1,
+    borderColor: "#2A2A2A",
+  },
+
+  generationHeader: {
+    flexDirection: "row",
     alignItems: "center",
   },
 
-  mobileVoiceSettingsButton: {
-    width: 24,
-    height: 42,
+  generationIcon: {
+    fontSize: 22,
+    marginRight: 10,
   },
 
-  voiceSettingsIcon: {
-    color: "#38BDF8",
-    fontSize: 22,
+  generationTextContainer: {
+    flex: 1,
+  },
+
+  generationTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
     fontWeight: "700",
   },
 
-  voiceOptions: {
-    position: "absolute",
-    bottom: 58,
-    left: 0,
-    width: 180,
-    backgroundColor: "#0F172A",
-    borderWidth: 1,
-    borderColor: "#1E293B",
-    borderRadius: 16,
-    padding: 8,
-    zIndex: 1000,
+  generationDescription: {
+    color: "#999999",
+    fontSize: 12,
+    marginTop: 3,
   },
 
-  voiceOption: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 10,
+  generationProgressTrack: {
+    height: 4,
+    marginTop: 12,
+    borderRadius: 4,
+    backgroundColor: "#303030",
+    overflow: "hidden",
   },
 
-  voiceOptionActive: {
-    backgroundColor: "#172554",
+  generationProgress: {
+    width: "65%",
+    height: "100%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 4,
   },
 
-  voiceOptionText: {
-    color: "#E5E7EB",
+  /* ==========================
+     LOADING
+  ========================== */
+
+  loadingBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 10,
+    paddingHorizontal: 10,
+  },
+
+  loadingTextContainer: {
+    flex: 1,
+    marginLeft: 10,
+  },
+
+  loadingText: {
+    color: "#19D3C5",
     fontSize: 14,
     fontWeight: "600",
   },
 
-  micButtonRecording: {
-    borderColor: "#38BDF8",
-    borderWidth: 2,
-    transform: [{ scale: 1.06 }],
+  mediaWaitingText: {
+    color: "#64748B",
+    fontSize: 12,
+    marginTop: 3,
   },
+
+  /* ==========================
+     KEYBOARD / COMPOSER
+  ========================== */
+
+  composerKeyboard: {
+    width: "100%",
+    backgroundColor: "#081216",
+  },
+
+  disclaimer: {
+    color: "#64748B",
+    fontSize: 11,
+    textAlign: "center",
+    marginTop: 6,
+    marginBottom: 5,
+    paddingHorizontal: 10,
+  },
+
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 30,
+    paddingTop: 12,
+    paddingBottom: 20,
+    backgroundColor: "#081216",
+    borderTopWidth: 1,
+    borderTopColor: "#172B30",
+  },
+
+  mobileInputContainer: {
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 10,
+    minHeight: 62,
+  },
+
+  /* ==========================
+     ATTACH
+  ========================== */
+
+  attachButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 17,
+    backgroundColor: "#0D2025",
+    borderWidth: 1,
+    borderColor: "#28474D",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+
+  mobileAttachButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 6,
+  },
+
+  attachText: {
+    color: "#D7AD5A",
+    fontSize: 26,
+    fontWeight: "400",
+    lineHeight: 29,
+  },
+
+  /* ==========================
+     INPUT
+  ========================== */
+
+  input: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 52,
+    maxHeight: 130,
+    backgroundColor: "#0C1B20",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#29464C",
+    color: "#F3F4EF",
+    fontSize: 15,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    outlineStyle: "none",
+  } as any,
+
+  mobileInput: {
+    minHeight: 44,
+    maxHeight: 110,
+    borderRadius: 22,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+
+  /* ==========================
+     SEND
+  ========================== */
+
+  sendButton: {
+    width: 52,
+    height: 52,
+    marginLeft: 10,
+    backgroundColor: "#18BEB3",
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#4AD8CE",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  mobileSendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginLeft: 6,
+  },
+
+  sendText: {
+    color: "#071014",
+    fontSize: 24,
+    fontWeight: "900",
+  },
+
+  mobileSendText: {
+    fontSize: 21,
+  },
+
+  /* ==========================
+     MICROPHONE
+  ========================== */
 
   micButton: {
     width: 48,
@@ -1716,14 +1855,22 @@ const styles = StyleSheet.create({
     borderColor: "#1E293B",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
+    marginLeft: 8,
+    marginRight: 10,
   },
 
   mobileMicButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    marginRight: 6,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginLeft: 6,
+    marginRight: 4,
+  },
+
+  micButtonRecording: {
+    borderColor: "#38BDF8",
+    borderWidth: 2,
+    transform: [{ scale: 1.06 }],
   },
 
   voiceIcon: {
@@ -1751,6 +1898,71 @@ const styles = StyleSheet.create({
     height: 22,
   },
 
+  /* ==========================
+     VOICE SETTINGS
+  ========================== */
+
+  voiceSettingsWrapper: {
+    position: "relative",
+    marginRight: 10,
+    zIndex: 100,
+  },
+
+  mobileVoiceSettingsWrapper: {
+    marginRight: 0,
+  },
+
+  voiceSettingsButton: {
+    width: 32,
+    height: 48,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  mobileVoiceSettingsButton: {
+    width: 22,
+    height: 40,
+  },
+
+  voiceSettingsIcon: {
+    color: "#38BDF8",
+    fontSize: 22,
+    fontWeight: "700",
+  },
+
+  voiceOptions: {
+    position: "absolute",
+    bottom: 58,
+    right: 0,
+    width: 180,
+    backgroundColor: "#0F172A",
+    borderWidth: 1,
+    borderColor: "#1E293B",
+    borderRadius: 16,
+    padding: 8,
+    zIndex: 1000,
+  },
+
+  voiceOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+
+  voiceOptionActive: {
+    backgroundColor: "#172554",
+  },
+
+  voiceOptionText: {
+    color: "#E5E7EB",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  /* ==========================
+     FILE PREVIEW
+  ========================== */
+
   filePreview: {
     flexDirection: "row",
     alignItems: "center",
@@ -1763,6 +1975,14 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     marginHorizontal: 30,
     marginBottom: 8,
+  },
+
+  mobileFilePreview: {
+    marginHorizontal: 10,
+    marginBottom: 6,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
   },
 
   fileInfo: {
@@ -1793,180 +2013,5 @@ const styles = StyleSheet.create({
   removeFileText: {
     color: "#789094",
     fontSize: 22,
-  },
-
-  appContainer: {
-    flex: 1,
-    flexDirection: "row",
-  },
-
-  root: {
-    flex: 1,
-    height: "100%",
-    minHeight: 0,
-    backgroundColor: "#081216",
-    paddingHorizontal: 12,
-  },
-
-  header: {
-    display: "none",
-  },
-
-  chatArea: {
-    flex: 1,
-    minHeight: 0,
-    width: "100%",
-    maxWidth: 900,
-    alignSelf: "center",
-    paddingHorizontal: 20,
-  },
-
-  messageBubble: {
-    maxWidth: "80%",
-    padding: 14,
-    borderRadius: 18,
-    marginBottom: 12,
-  },
-
-  userBubble: {
-    alignSelf: "flex-end",
-    backgroundColor: "#173A3E",
-  },
-
-  aiBubble: {
-    alignSelf: "flex-start",
-    backgroundColor: "#0C1B20",
-    borderWidth: 1,
-    borderColor: "#1D353A",
-  },
-
-  messageText: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-
-  userText: {
-    color: "#FFFFFF",
-  },
-
-  aiText: {
-    color: "#E8ECE8",
-  },
-
-  loadingBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 10,
-  },
-
-  loadingText: {
-    color: "#19D3C5",
-    marginLeft: 10,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
-  mediaWaitingText: {
-    color: "#64748B",
-    fontSize: 12,
-    marginLeft: 10,
-    marginTop: 3,
-  },
-
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 30,
-    paddingTop: 14,
-    paddingBottom: 20,
-    backgroundColor: "#081216",
-    borderTopWidth: 1,
-    borderTopColor: "#172B30",
-  },
-
-  mobileInputContainer: {
-    paddingHorizontal: 8,
-    paddingTop: 10,
-    paddingBottom: 28,
-  },
-
-  attachButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 17,
-    backgroundColor: "#0D2025",
-    borderWidth: 1,
-    borderColor: "#28474D",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 11,
-  },
-
-  mobileAttachButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    marginRight: 6,
-  },
-
-  attachText: {
-    color: "#D7AD5A",
-    fontSize: 26,
-    fontWeight: "400",
-    lineHeight: 29,
-  },
-
-  disclaimer: {
-    color: "#64748B",
-    fontSize: 11,
-    textAlign: "center",
-    marginTop: 8,
-    marginBottom: 6,
-  },
-
-  input: {
-    flex: 1,
-    height: 58,
-    minWidth: 0,
-    backgroundColor: "#0C1B20",
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: "#29464C",
-    color: "#F3F4EF",
-    fontSize: 15,
-    paddingHorizontal: 20,
-    outlineStyle: "none",
-  } as any,
-
-  mobileInput: {
-    height: 48,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    fontSize: 14,
-  },
-
-  sendButton: {
-    width: 52,
-    height: 52,
-    marginLeft: 11,
-    backgroundColor: "#18BEB3",
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: "#4AD8CE",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  mobileSendButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    marginLeft: 6,
-  },
-
-  sendText: {
-    color: "#071014",
-    fontSize: 24,
-    fontWeight: "900",
   },
 });
