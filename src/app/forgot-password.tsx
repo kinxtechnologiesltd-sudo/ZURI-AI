@@ -152,7 +152,7 @@ export default function ForgotPassword() {
               </Text>
 
               <Text style={styles.footerText}>
-                Powered by KINX
+                Powered by KYNX
               </Text>
             </View>
           </ScrollView>
