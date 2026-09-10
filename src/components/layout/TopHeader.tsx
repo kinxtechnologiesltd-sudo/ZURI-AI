@@ -4,11 +4,15 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import useUserPlan from "../../hooks/useUserPlan";
 
 export default function TopHeader() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+
+  const isMobile = width < 600;
 
   const {
     plan,
@@ -48,37 +52,49 @@ export default function TopHeader() {
   };
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        isMobile && styles.mobileContainer,
+      ]}
+    >
       {/* Left: Zuri Status */}
       <View style={styles.left}>
-        <View style={styles.statusIcon}>
-          <Text style={styles.statusLetter}>
-            Z
-          </Text>
+        <View
+          style={[
+            styles.statusIcon,
+            isMobile && styles.mobileStatusIcon,
+          ]}
+        >
+          <Text style={styles.statusLetter}>Z</Text>
 
           <View style={styles.onlineDot} />
         </View>
 
-        <View>
+        <View style={styles.leftInfo}>
           <View style={styles.titleRow}>
-            <Text style={styles.title}>
+            <Text
+              style={[
+                styles.title,
+                isMobile && styles.mobileTitle,
+              ]}
+            >
               Zuri
             </Text>
 
             <TouchableOpacity
-              style={styles.modelBadge}
+              style={[
+                styles.modelBadge,
+                isMobile && styles.mobileModelBadge,
+              ]}
               activeOpacity={0.8}
-              onPress={() =>
-                router.push("/pro")
-              }
+              onPress={() => router.push("/pro")}
             >
               <Text style={styles.modelText}>
                 {getPlanLabel()}
               </Text>
 
-              <Text style={styles.chevron}>
-                ⌄
-              </Text>
+              <Text style={styles.chevron}>⌄</Text>
             </TouchableOpacity>
           </View>
 
@@ -89,54 +105,79 @@ export default function TopHeader() {
       </View>
 
       {/* Right: Actions */}
-      <View style={styles.right}>
+      <View
+        style={[
+          styles.right,
+          isMobile && styles.mobileRight,
+        ]}
+      >
         <TouchableOpacity
-          style={styles.iconButton}
+          style={[
+            styles.iconButton,
+            isMobile && styles.mobileIconButton,
+          ]}
           activeOpacity={0.7}
         >
-          <Text style={styles.icon}>
-            ☀
-          </Text>
+          <Text style={styles.icon}>☀</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.iconButton}
+          style={[
+            styles.iconButton,
+            isMobile && styles.mobileIconButton,
+          ]}
           activeOpacity={0.7}
         >
-          <Text style={styles.icon}>
-            ♢
-          </Text>
+          <Text style={styles.icon}>♢</Text>
 
-          <View
-            style={styles.notificationDot}
-          />
+          <View style={styles.notificationDot} />
         </TouchableOpacity>
 
-        <View style={styles.divider} />
+        <View
+          style={[
+            styles.divider,
+            isMobile && styles.mobileDivider,
+          ]}
+        />
 
         <TouchableOpacity
           style={styles.profile}
           activeOpacity={0.8}
         >
-          <View style={styles.avatarOuter}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                J
-              </Text>
+          <View
+            style={[
+              styles.avatarOuter,
+              isMobile && styles.mobileAvatarOuter,
+            ]}
+          >
+            <View
+              style={[
+                styles.avatar,
+                isMobile && styles.mobileAvatar,
+              ]}
+            >
+              <Text style={styles.avatarText}>J</Text>
             </View>
           </View>
 
-          <View style={styles.profileInfo}>
-            <Text style={styles.name}>
-              Joseph
-            </Text>
+          {!isMobile && (
+            <View style={styles.profileInfo}>
+              <Text style={styles.name}>
+                Joseph
+              </Text>
 
-            <Text style={styles.plan}>
-              {getMemberLabel()}
-            </Text>
-          </View>
+              <Text style={styles.plan}>
+                {getMemberLabel()}
+              </Text>
+            </View>
+          )}
 
-          <Text style={styles.profileArrow}>
+          <Text
+            style={[
+              styles.profileArrow,
+              isMobile && styles.mobileProfileArrow,
+            ]}
+          >
             ⌄
           </Text>
         </TouchableOpacity>
@@ -160,9 +201,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  mobileContainer: {
+    height: 68,
+    paddingHorizontal: 14,
+  },
+
   left: {
     flexDirection: "row",
     alignItems: "center",
+    flexShrink: 1,
   },
 
   statusIcon: {
@@ -181,6 +228,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
 
     marginRight: 12,
+  },
+
+  mobileStatusIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    marginRight: 9,
   },
 
   statusLetter: {
@@ -205,9 +259,14 @@ const styles = StyleSheet.create({
     borderColor: "#081216",
   },
 
+  leftInfo: {
+    flexShrink: 1,
+  },
+
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexShrink: 1,
   },
 
   title: {
@@ -215,6 +274,11 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "800",
     marginRight: 9,
+  },
+
+  mobileTitle: {
+    fontSize: 16,
+    marginRight: 7,
   },
 
   modelBadge: {
@@ -230,6 +294,11 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: 9,
     paddingVertical: 4,
+  },
+
+  mobileModelBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
 
   modelText: {
@@ -254,6 +323,11 @@ const styles = StyleSheet.create({
   right: {
     flexDirection: "row",
     alignItems: "center",
+    flexShrink: 0,
+  },
+
+  mobileRight: {
+    marginLeft: 8,
   },
 
   iconButton: {
@@ -272,6 +346,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
 
     marginLeft: 8,
+  },
+
+  mobileIconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    marginLeft: 5,
   },
 
   icon: {
@@ -301,6 +382,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 15,
   },
 
+  mobileDivider: {
+    height: 26,
+    marginHorizontal: 7,
+  },
+
   profile: {
     flexDirection: "row",
     alignItems: "center",
@@ -318,6 +404,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  mobileAvatarOuter: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+
   avatar: {
     width: 34,
     height: 34,
@@ -327,6 +419,12 @@ const styles = StyleSheet.create({
 
     justifyContent: "center",
     alignItems: "center",
+  },
+
+  mobileAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
   },
 
   avatarText: {
@@ -355,5 +453,10 @@ const styles = StyleSheet.create({
     color: "#71878A",
     fontSize: 13,
     marginLeft: 10,
+  },
+
+  mobileProfileArrow: {
+    fontSize: 11,
+    marginLeft: 5,
   },
 });
