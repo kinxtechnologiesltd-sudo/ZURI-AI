@@ -1,5 +1,4 @@
 import {
-  cloneElement,
   createElement,
   type AnchorHTMLAttributes,
   type AudioHTMLAttributes,
@@ -45,6 +44,365 @@ type MessageBubbleProps = {
   researchImages?: ResearchImage[];
 };
 
+type MarkdownPart = {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  code?: boolean;
+  link?: string;
+};
+
+function parseInlineMarkdown(
+  input: string
+): MarkdownPart[] {
+  const parts: MarkdownPart[] = [];
+
+  const regex =
+    /(\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\*([^*]+)\*|_([^_]+)_)/g;
+
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(input)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({
+        text: input.slice(lastIndex, match.index),
+      });
+    }
+
+    if (match[2] || match[3]) {
+      parts.push({
+        text: match[2] || match[3],
+        bold: true,
+      });
+    } else if (match[4]) {
+      parts.push({
+        text: match[4],
+        code: true,
+      });
+    } else if (match[5] && match[6]) {
+      parts.push({
+        text: match[5],
+        link: match[6],
+      });
+    } else if (match[7] || match[8]) {
+      parts.push({
+        text: match[7] || match[8],
+        italic: true,
+      });
+    }
+
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < input.length) {
+    parts.push({
+      text: input.slice(lastIndex),
+    });
+  }
+
+  if (parts.length === 0) {
+    return [{ text: input }];
+  }
+
+  return parts;
+}
+
+function renderInlineMarkdown(
+  text: string,
+  isUser: boolean
+) {
+  const parts = parseInlineMarkdown(text);
+
+  return parts.map((part, index) => {
+    const style = [
+      isUser ? styles.userMessage : styles.aiMessage,
+      part.bold && styles.markdownBold,
+      part.italic && styles.markdownItalic,
+      part.code && styles.inlineCode,
+      part.link && styles.markdownLink,
+    ];
+
+    if (part.link) {
+      return (
+        <Text
+          key={`link-${index}`}
+          style={style}
+          onPress={() => {
+            void Linking.openURL(part.link!);
+          }}
+        >
+          {part.text}
+        </Text>
+      );
+    }
+
+    return (
+      <Text key={`text-${index}`} style={style}>
+        {part.text}
+      </Text>
+    );
+  });
+}
+
+function renderMarkdown(
+  text: string,
+  isUser: boolean
+) {
+  const normalized = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+
+  const lines = normalized.split("\n");
+
+  const elements: React.ReactNode[] = [];
+
+  let index = 0;
+  let codeLines: string[] = [];
+  let insideCodeBlock = false;
+
+  while (index < lines.length) {
+    const line = lines[index];
+
+    if (line.trim().startsWith("```")) {
+      if (!insideCodeBlock) {
+        insideCodeBlock = true;
+        codeLines = [];
+      } else {
+        insideCodeBlock = false;
+
+        elements.push(
+          <View
+            key={`code-${index}`}
+            style={styles.codeBlock}
+          >
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+            >
+              <Text style={styles.codeText}>
+                {codeLines.join("\n")}
+              </Text>
+            </ScrollView>
+          </View>
+        );
+
+        codeLines = [];
+      }
+
+      index += 1;
+      continue;
+    }
+
+    if (insideCodeBlock) {
+      codeLines.push(line);
+      index += 1;
+      continue;
+    }
+
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      elements.push(
+        <View
+          key={`space-${index}`}
+          style={styles.markdownSpacer}
+        />
+      );
+
+      index += 1;
+      continue;
+    }
+
+    // Heading
+    const headingMatch = trimmed.match(
+      /^(#{1,4})\s+(.+)$/
+    );
+
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+
+      elements.push(
+        <Text
+          key={`heading-${index}`}
+          style={[
+            styles.markdownHeading,
+            level === 1 && styles.headingOne,
+            level === 2 && styles.headingTwo,
+            level >= 3 && styles.headingThree,
+            isUser && styles.userMarkdownHeading,
+          ]}
+        >
+          {renderInlineMarkdown(
+            headingMatch[2],
+            isUser
+          )}
+        </Text>
+      );
+
+      index += 1;
+      continue;
+    }
+
+    // Bullet list
+    const bulletMatch = trimmed.match(
+      /^[-*•]\s+(.+)$/
+    );
+
+    if (bulletMatch) {
+      elements.push(
+        <View
+          key={`bullet-${index}`}
+          style={styles.listRow}
+        >
+          <Text style={styles.bullet}>
+            •
+          </Text>
+
+          <Text
+            style={[
+              styles.listText,
+              isUser
+                ? styles.userMessage
+                : styles.aiMessage,
+            ]}
+          >
+            {renderInlineMarkdown(
+              bulletMatch[1],
+              isUser
+            )}
+          </Text>
+        </View>
+      );
+
+      index += 1;
+      continue;
+    }
+
+    // Numbered list
+    const numberedMatch = trimmed.match(
+      /^(\d+)[.)]\s+(.+)$/
+    );
+
+    if (numberedMatch) {
+      elements.push(
+        <View
+          key={`number-${index}`}
+          style={styles.listRow}
+        >
+          <Text style={styles.numberBullet}>
+            {numberedMatch[1]}.
+          </Text>
+
+          <Text
+            style={[
+              styles.listText,
+              isUser
+                ? styles.userMessage
+                : styles.aiMessage,
+            ]}
+          >
+            {renderInlineMarkdown(
+              numberedMatch[2],
+              isUser
+            )}
+          </Text>
+        </View>
+      );
+
+      index += 1;
+      continue;
+    }
+
+    // Blockquote
+    const quoteMatch = trimmed.match(
+      /^>\s*(.+)$/
+    );
+
+    if (quoteMatch) {
+      elements.push(
+        <View
+          key={`quote-${index}`}
+          style={styles.quoteBlock}
+        >
+          <Text
+            style={[
+              styles.quoteText,
+              isUser
+                ? styles.userMessage
+                : styles.aiMessage,
+            ]}
+          >
+            {renderInlineMarkdown(
+              quoteMatch[1],
+              isUser
+            )}
+          </Text>
+        </View>
+      );
+
+      index += 1;
+      continue;
+    }
+
+    // Horizontal rule
+    if (
+      /^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)
+    ) {
+      elements.push(
+        <View
+          key={`rule-${index}`}
+          style={styles.markdownRule}
+        />
+      );
+
+      index += 1;
+      continue;
+    }
+
+    // Normal paragraph
+    elements.push(
+      <Text
+        key={`paragraph-${index}`}
+        style={[
+          styles.message,
+          isUser
+            ? styles.userMessage
+            : styles.aiMessage,
+          styles.markdownParagraph,
+        ]}
+      >
+        {renderInlineMarkdown(
+          line,
+          isUser
+        )}
+      </Text>
+    );
+
+    index += 1;
+  }
+
+  if (insideCodeBlock && codeLines.length > 0) {
+    elements.push(
+      <View
+        key="unfinished-code"
+        style={styles.codeBlock}
+      >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+        >
+          <Text style={styles.codeText}>
+            {codeLines.join("\n")}
+          </Text>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  return elements;
+}
+
 export default function MessageBubble({
   sender,
   text,
@@ -56,19 +414,6 @@ export default function MessageBubble({
   researchImages = [],
 }: MessageBubbleProps) {
   const isUser = sender === "user";
-
-  /**
-   * =====================================================
-   * VIDEO URL
-   * =====================================================
-   *
-   * Keep the URL exactly as returned by the backend.
-   *
-   * Render should return a publicly accessible HTTPS
-   * MP4 URL such as:
-   *
-   * https://zuri-ai-v1.onrender.com/generated/zuri-xxx.mp4
-   */
 
   const safeVideoUrl =
     typeof videoUrl === "string"
@@ -99,10 +444,6 @@ export default function MessageBubble({
           : styles.aiContainer,
       ]}
     >
-      {/* =================================================
-          ZURI AVATAR
-          ================================================= */}
-
       {!isUser && (
         <View style={styles.aiAvatarOuter}>
           <View style={styles.aiAvatar}>
@@ -115,10 +456,6 @@ export default function MessageBubble({
         </View>
       )}
 
-      {/* =================================================
-          MESSAGE CONTENT
-          ================================================= */}
-
       <View
         style={[
           styles.messageWrapper,
@@ -127,10 +464,6 @@ export default function MessageBubble({
             : styles.aiMessageWrapper,
         ]}
       >
-        {/* =================================================
-            SENDER
-            ================================================= */}
-
         <View
           style={[
             styles.senderRow,
@@ -157,10 +490,6 @@ export default function MessageBubble({
           )}
         </View>
 
-        {/* =================================================
-            TEXT
-            ================================================= */}
-
         {!!text && (
           <View
             style={[
@@ -170,22 +499,9 @@ export default function MessageBubble({
                 : styles.aiBubble,
             ]}
           >
-            <Text
-              style={[
-                styles.message,
-                isUser
-                  ? styles.userMessage
-                  : styles.aiMessage,
-              ]}
-            >
-              {text}
-            </Text>
+            {renderMarkdown(text, isUser)}
           </View>
         )}
-
-        {/* =================================================
-            GENERATED PDF
-            ================================================= */}
 
         {!isUser && safePdfUrl && (
           <TouchableOpacity
@@ -220,22 +536,34 @@ export default function MessageBubble({
           </TouchableOpacity>
         )}
 
-        {/* =================================================
-            RESEARCH IMAGES
-            ================================================= */}
-
         {!isUser &&
           researchImages.length > 0 && (
             <View style={styles.researchGallery}>
               <View style={styles.researchHeader}>
                 <View
-                  style={styles.researchHeaderDot}
-                />
+                  style={styles.researchHeaderLeft}
+                >
+                  <View
+                    style={
+                      styles.researchHeaderDot
+                    }
+                  />
+
+                  <Text
+                    style={
+                      styles.researchHeaderText
+                    }
+                  >
+                    SOURCES & IMAGES
+                  </Text>
+                </View>
 
                 <Text
-                  style={styles.researchHeaderText}
+                  style={
+                    styles.researchCount
+                  }
                 >
-                  RESEARCH IMAGES
+                  {researchImages.length}
                 </Text>
               </View>
 
@@ -250,12 +578,13 @@ export default function MessageBubble({
               >
                 {researchImages.map(
                   (item, index) => {
-                    const imageContent = (
+                    return (
                       <View
+                        key={`${item.url}-${index}`}
                         style={styles.researchCard}
                       >
                         <TouchableOpacity
-                          activeOpacity={0.8}
+                          activeOpacity={0.85}
                           onPress={() => {
                             if (item.url) {
                               void Linking.openURL(
@@ -273,6 +602,20 @@ export default function MessageBubble({
                             }
                             resizeMode="cover"
                           />
+
+                          <View
+                            style={
+                              styles.imageOverlay
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.imageOpenText
+                              }
+                            >
+                              View ↗
+                            </Text>
+                          </View>
                         </TouchableOpacity>
 
                         {!!item.title && (
@@ -285,43 +628,35 @@ export default function MessageBubble({
                             {item.title}
                           </Text>
                         )}
+
+                        {!!item.sourceUrl && (
+                          <TouchableOpacity
+                            style={
+                              styles.sourceButton
+                            }
+                            activeOpacity={0.75}
+                            onPress={() => {
+                              void Linking.openURL(
+                                item.sourceUrl!
+                              );
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.sourceButtonText
+                              }
+                            >
+                              View source ↗
+                            </Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
-                    );
-
-                    const sourceUrl =
-                      item.sourceUrl;
-
-                    if (sourceUrl) {
-                      return (
-                        <TouchableOpacity
-                          key={`${item.url}-${index}-link`}
-                          activeOpacity={0.85}
-                          onPress={() => {
-                            void Linking.openURL(
-                              sourceUrl
-                            );
-                          }}
-                        >
-                          {imageContent}
-                        </TouchableOpacity>
-                      );
-                    }
-
-                    return cloneElement(
-                      imageContent,
-                      {
-                        key: `${item.url}-${index}`,
-                      }
                     );
                   }
                 )}
               </ScrollView>
             </View>
           )}
-
-        {/* =================================================
-            GENERATED IMAGE
-            ================================================= */}
 
         {!!safeImageUrl && (
           <View style={styles.imageContainer}>
@@ -352,15 +687,11 @@ export default function MessageBubble({
                   "/image/upload/",
                   "/image/upload/fl_attachment:zuri-generated-image/"
                 ),
-
                 download:
                   "zuri-generated-image",
-
                 target: "_blank",
-
                 rel:
                   "noopener noreferrer",
-
                 style: {
                   display: "flex",
                   alignItems: "center",
@@ -384,102 +715,97 @@ export default function MessageBubble({
             )}
           </View>
         )}
-{/* Generated Video */}
-{videoUrl && (
-  <View style={styles.videoContainer}>
-    {createElement("video", {
-      src: videoUrl,
-      controls: true,
-      playsInline: true,
-      preload: "metadata",
 
-      style: {
-        width: "100%",
-        height: 360,
-        display: "block",
-        objectFit: "contain",
-        backgroundColor: "#050A0D",
-        borderRadius: 12,
-      },
+        {!!safeVideoUrl && (
+          <View style={styles.videoContainer}>
+            {createElement("video", {
+              src: safeVideoUrl,
+              controls: true,
+              playsInline: true,
+              preload: "metadata",
 
-      onLoadedMetadata: () => {
-        console.log(
-          "✅ ZURI VIDEO METADATA LOADED:",
-          videoUrl
-        );
-      },
+              style: {
+                width: "100%",
+                height: 360,
+                display: "block",
+                objectFit: "contain",
+                backgroundColor: "#050A0D",
+                borderRadius: 12,
+              },
 
-      onCanPlay: () => {
-        console.log(
-          "▶️ ZURI VIDEO CAN PLAY:",
-          videoUrl
-        );
-      },
+              onLoadedMetadata: () => {
+                console.log(
+                  "✅ ZURI VIDEO METADATA LOADED:",
+                  safeVideoUrl
+                );
+              },
 
-      onError: () => {
-        /**
-         * IMPORTANT:
-         * Do NOT log the React/DOM event object.
-         *
-         * HTMLVideoElement events contain circular
-         * React internals and cannot safely be
-         * JSON serialized.
-         */
+              onCanPlay: () => {
+                console.log(
+                  "▶️ ZURI VIDEO CAN PLAY:",
+                  safeVideoUrl
+                );
+              },
 
-        console.error(
-          "❌ ZURI VIDEO PLAYBACK ERROR:",
-          {
-            videoUrl,
-            message:
-              "The browser could not load or play the generated video.",
-          }
-        );
-      },
-    } satisfies WebVideoProps)}
+              onError: () => {
+                console.error(
+                  "❌ ZURI VIDEO PLAYBACK ERROR:",
+                  {
+                    videoUrl:
+                      safeVideoUrl,
+                    message:
+                      "The browser could not load or play the generated video.",
+                  }
+                );
+              },
+            } satisfies WebVideoProps)}
 
-    <View style={styles.videoLabel}>
-      <View style={styles.videoLabelDot} />
+            <View style={styles.videoLabel}>
+              <View
+                style={styles.videoLabelDot}
+              />
 
-      <Text style={styles.videoLabelText}>
-        CREATED WITH ZURI
-      </Text>
-    </View>
+              <Text
+                style={styles.videoLabelText}
+              >
+                CREATED WITH ZURI
+              </Text>
+            </View>
 
-    {/* Download Video */}
-    {createElement(
-      "a",
-      {
-        href: videoUrl,
-        target: "_blank",
-        rel: "noopener noreferrer",
-        download: true,
+            {createElement(
+              "a",
+              {
+                href: safeVideoUrl,
+                target: "_blank",
+                rel:
+                  "noopener noreferrer",
+                download: true,
 
-        style: {
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: "100%",
-          marginTop: 4,
-          marginBottom: 10,
-          padding: "11px 14px",
-          borderRadius: 12,
-          backgroundColor: "#12383D",
-          border: "1px solid #31565B",
-          color: "#E8F2F0",
-          textDecoration: "none",
-          fontSize: 13,
-          fontWeight: "700",
-          boxSizing: "border-box",
-          cursor: "pointer",
-        },
-      } satisfies AnchorHTMLAttributes<HTMLAnchorElement>,
-      "⬇ Download Video"
-    )}
-  </View>
-)}
-        {/* =================================================
-            GENERATED MUSIC
-            ================================================= */}
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "100%",
+                  marginTop: 4,
+                  marginBottom: 10,
+                  padding: "11px 14px",
+                  borderRadius: 12,
+                  backgroundColor:
+                    "#12383D",
+                  border:
+                    "1px solid #31565B",
+                  color: "#E8F2F0",
+                  textDecoration: "none",
+                  fontSize: 13,
+                  fontWeight: "700",
+                  boxSizing: "border-box",
+                  cursor: "pointer",
+                },
+              } satisfies AnchorHTMLAttributes<HTMLAnchorElement>,
+              "⬇ Download Video"
+            )}
+          </View>
+        )}
 
         {!!safeAudioUrl && (
           <View style={styles.audioContainer}>
@@ -515,24 +841,20 @@ export default function MessageBubble({
               "audio",
               {
                 src: safeAudioUrl,
-
                 controls: true,
-
-                preload:
-                  "metadata",
+                preload: "metadata",
 
                 style: {
                   width: "100%",
                   display: "block",
                 },
 
-                onError: (event) => {
+                onError: () => {
                   console.error(
                     "❌ ZURI AUDIO PLAYBACK ERROR:",
                     {
                       audioUrl:
                         safeAudioUrl,
-                      event,
                     }
                   );
                 },
@@ -549,49 +871,31 @@ export default function MessageBubble({
             {createElement(
               "a",
               {
-                href:
-                  safeAudioUrl,
-
+                href: safeAudioUrl,
                 download:
                   "zuri-music.mp3",
-
-                target:
-                  "_blank",
-
+                target: "_blank",
                 rel:
                   "noopener noreferrer",
 
                 style: {
-                  display:
-                    "flex",
-                  alignItems:
-                    "center",
-                  justifyContent:
-                    "center",
-                  width:
-                    "100%",
-                  marginTop:
-                    12,
-                  padding:
-                    "11px 14px",
-                  borderRadius:
-                    12,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "100%",
+                  marginTop: 12,
+                  padding: "11px 14px",
+                  borderRadius: 12,
                   backgroundColor:
                     "#12383D",
                   border:
                     "1px solid #31565B",
-                  color:
-                    "#E8F2F0",
-                  textDecoration:
-                    "none",
-                  fontSize:
-                    13,
-                  fontWeight:
-                    "700",
-                  boxSizing:
-                    "border-box",
-                  cursor:
-                    "pointer",
+                  color: "#E8F2F0",
+                  textDecoration: "none",
+                  fontSize: 13,
+                  fontWeight: "700",
+                  boxSizing: "border-box",
+                  cursor: "pointer",
                 },
               } satisfies WebAudioDownloadProps,
               "⬇ Download Music"
@@ -616,10 +920,6 @@ export default function MessageBubble({
         )}
       </View>
 
-      {/* =================================================
-          USER AVATAR
-          ================================================= */}
-
       {isUser && (
         <View style={styles.userAvatarOuter}>
           <View style={styles.userAvatar}>
@@ -634,10 +934,6 @@ export default function MessageBubble({
     </View>
   );
 }
-
-/* =======================================================
-   STYLES
-   ======================================================= */
 
 const styles = StyleSheet.create({
   container: {
@@ -654,10 +950,6 @@ const styles = StyleSheet.create({
   aiContainer: {
     justifyContent: "flex-start",
   },
-
-  /* =====================================================
-     ZURI AVATAR
-     ===================================================== */
 
   aiAvatarOuter: {
     position: "relative",
@@ -698,10 +990,6 @@ const styles = StyleSheet.create({
     borderColor: "#081216",
   },
 
-  /* =====================================================
-     USER AVATAR
-     ===================================================== */
-
   userAvatarOuter: {
     width: 42,
     height: 42,
@@ -727,10 +1015,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
   },
-
-  /* =====================================================
-     MESSAGE LAYOUT
-     ===================================================== */
 
   messageWrapper: {
     maxWidth: "75%",
@@ -785,10 +1069,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  /* =====================================================
-     MESSAGE BUBBLES
-     ===================================================== */
-
   bubble: {
     borderRadius: 19,
     paddingHorizontal: 18,
@@ -822,9 +1102,124 @@ const styles = StyleSheet.create({
     color: "#E4E9E6",
   },
 
-  /* =====================================================
-     PDF
-     ===================================================== */
+  markdownParagraph: {
+    marginBottom: 3,
+  },
+
+  markdownSpacer: {
+    height: 7,
+  },
+
+  markdownHeading: {
+    marginTop: 7,
+    marginBottom: 8,
+    color: "#F1F4F1",
+    fontWeight: "800",
+  },
+
+  headingOne: {
+    fontSize: 22,
+    lineHeight: 29,
+  },
+
+  headingTwo: {
+    fontSize: 19,
+    lineHeight: 26,
+  },
+
+  headingThree: {
+    fontSize: 16,
+    lineHeight: 23,
+  },
+
+  userMarkdownHeading: {
+    color: "#FFFFFF",
+  },
+
+  markdownBold: {
+    fontWeight: "800",
+  },
+
+  markdownItalic: {
+    fontStyle: "italic",
+  },
+
+  markdownLink: {
+    color: "#22C9BE",
+    textDecorationLine: "underline",
+  },
+
+  inlineCode: {
+    fontFamily: "monospace",
+    backgroundColor: "#10282D",
+    color: "#D7AD5A",
+    paddingHorizontal: 4,
+    borderRadius: 4,
+  },
+
+  codeBlock: {
+    marginVertical: 9,
+    padding: 13,
+    borderRadius: 12,
+    backgroundColor: "#050D10",
+    borderWidth: 1,
+    borderColor: "#20383D",
+  },
+
+  codeText: {
+    color: "#D7E2DF",
+    fontFamily: "monospace",
+    fontSize: 12,
+    lineHeight: 19,
+  },
+
+  listRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 6,
+    paddingRight: 3,
+  },
+
+  bullet: {
+    width: 20,
+    color: "#D7AD5A",
+    fontSize: 17,
+    lineHeight: 23,
+    fontWeight: "800",
+  },
+
+  numberBullet: {
+    width: 25,
+    color: "#D7AD5A",
+    fontSize: 14,
+    lineHeight: 24,
+    fontWeight: "800",
+  },
+
+  listText: {
+    flex: 1,
+    fontSize: 15,
+    lineHeight: 24,
+  },
+
+  quoteBlock: {
+    marginVertical: 7,
+    paddingLeft: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: "#D7AD5A",
+  },
+
+  quoteText: {
+    fontSize: 14,
+    lineHeight: 23,
+    fontStyle: "italic",
+  },
+
+  markdownRule: {
+    height: 1,
+    backgroundColor: "#294146",
+    marginVertical: 10,
+  },
 
   pdfDownloadButton: {
     flexDirection: "row",
@@ -866,19 +1261,15 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  /* =====================================================
-     RESEARCH IMAGES
-     ===================================================== */
-
   researchGallery: {
     width: 420,
     maxWidth: "100%",
-    marginTop: 11,
-    paddingTop: 10,
-    paddingBottom: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    paddingBottom: 10,
     paddingHorizontal: 10,
     borderRadius: 18,
-    backgroundColor: "#0B191E",
+    backgroundColor: "#09161A",
     borderWidth: 1,
     borderColor: "#213B40",
   },
@@ -886,8 +1277,14 @@ const styles = StyleSheet.create({
   researchHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    justifyContent: "space-between",
+    marginBottom: 10,
     paddingHorizontal: 4,
+  },
+
+  researchHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
   },
 
   researchHeaderDot: {
@@ -899,10 +1296,25 @@ const styles = StyleSheet.create({
   },
 
   researchHeaderText: {
-    color: "#71888B",
-    fontSize: 7,
+    color: "#9AAEB0",
+    fontSize: 8,
     fontWeight: "900",
-    letterSpacing: 1.4,
+    letterSpacing: 1.2,
+  },
+
+  researchCount: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 11,
+    backgroundColor: "#102A2E",
+    borderWidth: 1,
+    borderColor: "#29494D",
+    color: "#19C8BC",
+    fontSize: 10,
+    fontWeight: "800",
+    textAlign: "center",
+    lineHeight: 20,
   },
 
   researchScrollContent: {
@@ -910,32 +1322,60 @@ const styles = StyleSheet.create({
   },
 
   researchCard: {
-    width: 150,
+    width: 168,
     marginRight: 10,
     backgroundColor: "#0D2025",
-    borderRadius: 14,
+    borderRadius: 15,
     borderWidth: 1,
-    borderColor: "#2B3F42",
+    borderColor: "#294348",
     overflow: "hidden",
   },
 
   researchImage: {
-    width: 150,
-    height: 160,
+    width: 168,
+    height: 145,
     backgroundColor: "#102B31",
   },
 
-  researchTitle: {
-    color: "#E5E7EB",
-    fontSize: 10,
-    lineHeight: 14,
+  imageOverlay: {
+    position: "absolute",
+    right: 8,
+    bottom: 8,
     paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: "rgba(4,12,15,0.82)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
   },
 
-  /* =====================================================
-     GENERATED IMAGE
-     ===================================================== */
+  imageOpenText: {
+    color: "#F2F5F2",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+
+  researchTitle: {
+    color: "#E5E9E7",
+    fontSize: 11,
+    lineHeight: 15,
+    paddingHorizontal: 9,
+    paddingTop: 9,
+    paddingBottom: 5,
+  },
+
+  sourceButton: {
+    alignSelf: "flex-start",
+    marginHorizontal: 9,
+    marginBottom: 9,
+    marginTop: 2,
+  },
+
+  sourceButtonText: {
+    color: "#19C8BC",
+    fontSize: 9,
+    fontWeight: "800",
+  },
 
   imageContainer: {
     width: 420,
@@ -976,10 +1416,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
   },
 
-  /* =====================================================
-     GENERATED VIDEO
-     ===================================================== */
-
   videoContainer: {
     width: 520,
     maxWidth: "100%",
@@ -990,27 +1426,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#5C4C2E",
     overflow: "hidden",
-  },
-
-  videoHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 4,
-    paddingTop: 2,
-    paddingBottom: 10,
-  },
-
-  videoTitle: {
-    color: "#D7AD5A",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.5,
-  },
-
-  videoSubtitle: {
-    color: "#71888B",
-    fontSize: 11,
-    marginTop: 3,
   },
 
   videoLabel: {
@@ -1034,10 +1449,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1.4,
   },
-
-  /* =====================================================
-     GENERATED MUSIC
-     ===================================================== */
 
   audioContainer: {
     width: 520,

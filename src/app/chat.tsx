@@ -3,7 +3,6 @@ import {
   RecordingPresets,
   useAudioRecorder,
 } from "expo-audio";
-import * as DocumentPicker from "expo-document-picker";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -38,7 +37,8 @@ import { uploadGeneratedImage } from "../hooks/imageStorageService";
 import { getMemories } from "../hooks/memoryService";
 import useUserPlan from "../hooks/useUserPlan";
 
-const API_BASE_URL = "https://zuri-ai-v1.onrender.com";
+const API_BASE_URL =
+  "https://zuri-ai-v1.onrender.com";
 
 type Message = {
   text: string;
@@ -93,7 +93,9 @@ function GenerationStatus({
             {status.title}
           </Text>
 
-          <Text style={styles.generationDescription}>
+          <Text
+            style={styles.generationDescription}
+          >
             {status.text}
           </Text>
         </View>
@@ -108,7 +110,9 @@ function GenerationStatus({
 
 export default function Chat() {
   const [mediaGenerationType, setMediaGenerationType] =
-    useState<"image" | "music" | "video" | null>(null);
+    useState<
+      "image" | "music" | "video" | null
+    >(null);
 
   const {
     currentConversationId,
@@ -122,7 +126,8 @@ export default function Chat() {
     RecordingPresets.HIGH_QUALITY
   );
 
-  const [isRecording, setIsRecording] = useState(false);
+  const [isRecording, setIsRecording] =
+    useState(false);
 
   const {
     voiceGender,
@@ -137,11 +142,39 @@ export default function Chat() {
 
   const { isProUser } = useUserPlan();
 
-  useEffect(() => {
-    console.log("Zuri Pro status:", isProUser);
-  }, [isProUser]);
+  const [isVoiceMode, setIsVoiceMode] =
+    useState(false);
 
-  const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
+
+  const [generationType, setGenerationType] =
+    useState<
+      "image" | "music" | "video" | "comic" | null
+    >(null);
+
+
+  const [messages, setMessages] =
+    useState<Message[]>([]);
+
+  const [showMobileHistory, setShowMobileHistory] =
+    useState(false);
+
+  const scrollViewRef =
+    useRef<ScrollView>(null);
+
+  const { width } = useWindowDimensions();
+
+  const isDesktop = width >= 1024;
+  const isMobile = width < 600;
+  const isSmallPhone = width < 380;
+
+  useEffect(() => {
+    console.log(
+      "Zuri Pro status:",
+      isProUser
+    );
+  }, [isProUser]);
 
   async function toggleRecording() {
     try {
@@ -153,18 +186,35 @@ export default function Chat() {
         const audioUri = audioRecorder.uri;
 
         if (!audioUri) {
-          console.log("No recording URI found.");
+          console.log(
+            "No recording URI found."
+          );
           return;
         }
 
-        console.log("Recording saved:", audioUri);
+        console.log(
+          "Recording saved:",
+          audioUri
+        );
 
-        const audioResponse = await fetch(audioUri);
-        const audioBlob = await audioResponse.blob();
+        const audioResponse =
+          await fetch(audioUri);
 
-        console.log("audioBlob:", audioBlob);
-        console.log("Blob size:", audioBlob.size);
-        console.log("Blob type:", audioBlob.type);
+        const audioBlob =
+          await audioResponse.blob();
+
+        console.log(
+          "audioBlob:",
+          audioBlob
+        );
+        console.log(
+          "Blob size:",
+          audioBlob.size
+        );
+        console.log(
+          "Blob type:",
+          audioBlob.type
+        );
 
         const formData = new FormData();
 
@@ -174,15 +224,18 @@ export default function Chat() {
           "zuri-voice.webm"
         );
 
-        console.log("Sending voice to Zuri...");
-
-        const transcriptionResponse = await fetch(
-          `${API_BASE_URL}/voice/transcribe`,
-          {
-            method: "POST",
-            body: formData,
-          }
+        console.log(
+          "Sending voice to Zuri..."
         );
+
+        const transcriptionResponse =
+          await fetch(
+            `${API_BASE_URL}/voice/transcribe`,
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
 
         const responseText =
           await transcriptionResponse.text();
@@ -257,13 +310,20 @@ export default function Chat() {
 
       console.log("Recording started");
     } catch (error) {
-      console.error("Voice error:", error);
+      console.error(
+        "Voice error:",
+        error
+      );
+
       setIsRecording(false);
     }
   }
 
-  const speakBrowserVoice = (text: string) => {
-    if (typeof window === "undefined") return;
+  const speakBrowserVoice = (
+    text: string
+  ) => {
+    if (typeof window === "undefined")
+      return;
 
     if (!("speechSynthesis" in window)) {
       console.log(
@@ -407,10 +467,14 @@ export default function Chat() {
 
     speech.volume = 1;
 
-    window.speechSynthesis.speak(speech);
+    window.speechSynthesis.speak(
+      speech
+    );
   };
 
-  const speakZuriReply = async (text: string) => {
+  const speakZuriReply = async (
+    text: string
+  ) => {
     if (!isProUser) {
       speakBrowserVoice(text);
       return;
@@ -432,7 +496,8 @@ export default function Chat() {
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
           body: JSON.stringify({
             text,
@@ -460,7 +525,9 @@ export default function Chat() {
         new Audio(audioUrl);
 
       audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
+        URL.revokeObjectURL(
+          audioUrl
+        );
       };
 
       await audio.play();
@@ -473,28 +540,6 @@ export default function Chat() {
       speakBrowserVoice(text);
     }
   };
-
-  const [loading, setLoading] =
-    useState(false);
-
-  const [generationType, setGenerationType] =
-    useState<
-      "image" | "music" | "video" | "comic" | null
-    >(null);
-
-  const [selectedFile, setSelectedFile] =
-    useState<any>(null);
-
-  const scrollViewRef =
-    useRef<ScrollView>(null);
-
-  const { width } = useWindowDimensions();
-
-  const isDesktop = width >= 1024;
-  const isMobile = width < 600;
-
-  const [messages, setMessages] =
-    useState<Message[]>([]);
 
   useEffect(() => {
     console.log(
@@ -635,21 +680,6 @@ export default function Chat() {
       )
     );
 
-    if (selectedFile) {
-      const fileResponse =
-        await fetch(selectedFile.uri);
-
-      const blob =
-        await fileResponse.blob();
-
-      formData.append(
-        "file",
-        blob,
-        selectedFile.name ||
-          "attachment"
-      );
-    }
-
     console.log(
       "Sending message to Zuri:",
       message
@@ -741,44 +771,6 @@ export default function Chat() {
     }
 
     return data;
-  };
-
-  const pickDocument = async () => {
-    try {
-      const result =
-        await DocumentPicker.getDocumentAsync(
-          {
-            type: [
-              "image/*",
-              "application/pdf",
-            ],
-            multiple: false,
-            copyToCacheDirectory: true,
-          }
-        );
-
-      if (!result.canceled) {
-        const file =
-          result.assets[0];
-
-        setSelectedFile(file);
-
-        console.log(
-          "Selected file:",
-          file.name
-        );
-
-        console.log(
-          "File URI:",
-          file.uri
-        );
-      }
-    } catch (error) {
-      console.error(
-        "Error selecting file:",
-        error
-      );
-    }
   };
 
   const waitForMusic = async (
@@ -1011,7 +1003,6 @@ export default function Chat() {
       }
 
       const wantsImage =
-        !selectedFile &&
         /\b(generate|create|make|draw)\b[\s\S]{0,80}\b(image|picture|photo|artwork|illustration)\b/i.test(
           prompt
         );
@@ -1070,8 +1061,7 @@ export default function Chat() {
 
         triggerConversationRefresh();
 
-        setSelectedFile(null);
-
+  
         return;
       }
 
@@ -1189,7 +1179,6 @@ export default function Chat() {
         );
       }
 
-      setSelectedFile(null);
     } catch (error) {
       console.error(
         "❌ Zuri sendMessage error:",
@@ -1215,35 +1204,66 @@ export default function Chat() {
     }
   }
 
+  const handleComposerFocus = () => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd(
+        {
+          animated: true,
+        }
+      );
+    }, 250);
+  };
+
   return (
     <View style={styles.appContainer}>
       {isDesktop && <Sidebar />}
 
       <View style={styles.root}>
-        <TopHeader />
+        <TopHeader
+          onMenuPress={
+            isMobile
+              ? () =>
+                  setShowMobileHistory(
+                    true
+                  )
+              : undefined
+          }
+        />
 
         <ScrollView
           ref={scrollViewRef}
           style={styles.chatArea}
-          showsVerticalScrollIndicator={true}
+          showsVerticalScrollIndicator={
+            !isMobile
+          }
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={
+            Platform.OS === "ios"
+              ? "interactive"
+              : "none"
+          }
           onContentSizeChange={() => {
             if (messages.length > 0) {
-              scrollViewRef.current?.scrollToEnd({
-                animated: true,
-              });
+              scrollViewRef.current?.scrollToEnd(
+                {
+                  animated: true,
+                }
+              );
             }
           }}
           contentContainerStyle={[
             styles.chatContent,
-            isMobile && styles.mobileChatContent,
+            isMobile &&
+              styles.mobileChatContent,
+            isSmallPhone &&
+              styles.smallPhoneChatContent,
           ]}
         >
           {messages.length === 0 && (
             <EmptyChat
-              onSelectPrompt={(prompt: string) =>
-                setInput(prompt)
-              }
+              onSelectPrompt={(
+                prompt: string
+              ) => setInput(prompt)}
             />
           )}
 
@@ -1253,25 +1273,42 @@ export default function Chat() {
                 key={index}
                 sender={message.sender}
                 text={message.text}
-                imageUrl={message.imageUrl}
-                videoUrl={message.videoUrl}
-                audioUrl={message.audioUrl}
+                imageUrl={
+                  message.imageUrl
+                }
+                videoUrl={
+                  message.videoUrl
+                }
+                audioUrl={
+                  message.audioUrl
+                }
                 researchImages={
-                  message.researchImages || []
+                  message.researchImages ||
+                  []
                 }
               />
             )
           )}
 
           {loading && (
-            <View style={styles.loadingBox}>
+            <View
+              style={styles.loadingBox}
+            >
               <ActivityIndicator
                 size="large"
                 color="#553504"
               />
 
-              <View style={styles.loadingTextContainer}>
-                <Text style={styles.loadingText}>
+              <View
+                style={
+                  styles.loadingTextContainer
+                }
+              >
+                <Text
+                  style={
+                    styles.loadingText
+                  }
+                >
                   {mediaGenerationType ===
                   "video"
                     ? "🎬 Zuri is generating your video..."
@@ -1290,8 +1327,8 @@ export default function Chat() {
                       styles.mediaWaitingText
                     }
                   >
-                    This may take a little while.
-                    Please wait...
+                    This may take a little
+                    while. Please wait...
                   </Text>
                 )}
               </View>
@@ -1299,60 +1336,25 @@ export default function Chat() {
           )}
         </ScrollView>
 
+        {/* ==========================
+            MOBILE / DESKTOP COMPOSER
+        ========================== */}
+
         <KeyboardAvoidingView
           style={styles.composerKeyboard}
-          behavior={
-            Platform.OS === "ios"
-              ? "padding"
-              : "height"
-          }
+          behavior="padding"
           keyboardVerticalOffset={0}
         >
-          <Text style={styles.disclaimer}>
-            Zuri can make mistakes. Check important
-            information.
+          <Text
+            style={[
+              styles.disclaimer,
+              isMobile &&
+                styles.mobileDisclaimer,
+            ]}
+          >
+            Zuri can make mistakes. Check
+            important information.
           </Text>
-
-          {selectedFile && (
-            <View
-              style={[
-                styles.filePreview,
-                isMobile &&
-                  styles.mobileFilePreview,
-              ]}
-            >
-              <View style={styles.fileInfo}>
-                <Text style={styles.fileIcon}>
-                  {selectedFile.mimeType?.startsWith(
-                    "image/"
-                  )
-                    ? "🖼️"
-                    : "📄"}
-                </Text>
-
-                <Text
-                  style={styles.fileName}
-                  numberOfLines={1}
-                >
-                  {selectedFile.name}
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                onPress={() =>
-                  setSelectedFile(null)
-                }
-                style={styles.removeFileButton}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={styles.removeFileText}
-                >
-                  ×
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
 
           {generationType && (
             <GenerationStatus
@@ -1365,23 +1367,10 @@ export default function Chat() {
               styles.inputContainer,
               isMobile &&
                 styles.mobileInputContainer,
+              isSmallPhone &&
+                styles.smallPhoneInputContainer,
             ]}
           >
-            {/* ATTACH */}
-            <TouchableOpacity
-              style={[
-                styles.attachButton,
-                isMobile &&
-                  styles.mobileAttachButton,
-              ]}
-              onPress={pickDocument}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.attachText}>
-                +
-              </Text>
-            </TouchableOpacity>
-
             {/* TEXT INPUT */}
             <TextInput
               value={input}
@@ -1392,22 +1381,20 @@ export default function Chat() {
                 styles.input,
                 isMobile &&
                   styles.mobileInput,
+                isSmallPhone &&
+                  styles.smallPhoneInput,
               ]}
               multiline
               textAlignVertical="center"
               autoCapitalize="sentences"
               autoCorrect={true}
-              onFocus={() => {
-                setTimeout(() => {
-                  scrollViewRef.current?.scrollToEnd(
-                    {
-                      animated: true,
-                    }
-                  );
-                }, 150);
-              }}
+              onFocus={
+                handleComposerFocus
+              }
               onSubmitEditing={() => {
-                if (Platform.OS !== "ios") {
+                if (
+                  Platform.OS !== "ios"
+                ) {
                   sendMessage();
                 }
               }}
@@ -1426,11 +1413,19 @@ export default function Chat() {
                   styles.sendButton,
                   isMobile &&
                     styles.mobileSendButton,
+                  isSmallPhone &&
+                    styles.smallPhoneActionButton,
                 ]}
                 onPress={() =>
                   sendMessage()
                 }
                 activeOpacity={0.8}
+                hitSlop={{
+                  top: 4,
+                  bottom: 4,
+                  left: 4,
+                  right: 4,
+                }}
               >
                 <Text
                   style={[
@@ -1448,6 +1443,8 @@ export default function Chat() {
                   styles.micButton,
                   isMobile &&
                     styles.mobileMicButton,
+                  isSmallPhone &&
+                    styles.smallPhoneActionButton,
                   isRecording &&
                     styles.micButtonRecording,
                 ]}
@@ -1455,9 +1452,17 @@ export default function Chat() {
                   toggleRecording
                 }
                 activeOpacity={0.8}
+                hitSlop={{
+                  top: 4,
+                  bottom: 4,
+                  left: 4,
+                  right: 4,
+                }}
               >
                 <View
-                  style={styles.voiceIcon}
+                  style={
+                    styles.voiceIcon
+                  }
                 >
                   <View
                     style={[
@@ -1465,24 +1470,28 @@ export default function Chat() {
                       styles.voiceLineShort,
                     ]}
                   />
+
                   <View
                     style={[
                       styles.voiceLine,
                       styles.voiceLineTall,
                     ]}
                   />
+
                   <View
                     style={[
                       styles.voiceLine,
                       styles.voiceLineMedium,
                     ]}
                   />
+
                   <View
                     style={[
                       styles.voiceLine,
                       styles.voiceLineTall,
                     ]}
                   />
+
                   <View
                     style={[
                       styles.voiceLine,
@@ -1540,6 +1549,7 @@ export default function Chat() {
                       setVoiceGender(
                         "female"
                       );
+
                       setShowVoiceOptions(
                         false
                       );
@@ -1565,6 +1575,7 @@ export default function Chat() {
                       setVoiceGender(
                         "male"
                       );
+
                       setShowVoiceOptions(
                         false
                       );
@@ -1584,8 +1595,206 @@ export default function Chat() {
           </View>
         </KeyboardAvoidingView>
       </View>
-
       {isDesktop && <RightPanel />}
+
+      {/* ==========================
+          MOBILE ZURI V1 PANEL
+      ========================== */}
+
+      {isMobile &&
+        showMobileHistory && (
+          <View
+            style={styles.mobileHistoryOverlay}
+          >
+            {/* BACKDROP */}
+            <TouchableOpacity
+              style={
+                styles.mobileHistoryBackdrop
+              }
+              activeOpacity={1}
+              onPress={() =>
+                setShowMobileHistory(false)
+              }
+            />
+
+            {/* ZURI PANEL */}
+            <View
+              style={[
+                styles.mobileHistoryPanel,
+                isSmallPhone &&
+                  styles.smallPhoneHistoryPanel,
+              ]}
+            >
+              {/* HEADER */}
+              <View
+                style={
+                  styles.mobileHistoryHeader
+                }
+              >
+                <Text
+                  style={
+                    styles.mobileHistoryTitle
+                  }
+                >
+                  ZURI
+                </Text>
+
+                <TouchableOpacity
+                  style={
+                    styles.mobileHistoryClose
+                  }
+                  onPress={() =>
+                    setShowMobileHistory(false)
+                  }
+                  activeOpacity={0.75}
+                  hitSlop={{
+                    top: 8,
+                    bottom: 8,
+                    left: 8,
+                    right: 8,
+                  }}
+                >
+                  <Text
+                    style={
+                      styles.mobileHistoryCloseText
+                    }
+                  >
+                    ×
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* CONTENT */}
+              <ScrollView
+                style={
+                  styles.mobileHistoryContent
+                }
+                contentContainerStyle={
+                  styles.zuriPanelContent
+                }
+                showsVerticalScrollIndicator={
+                  false
+                }
+              >
+                <View
+                  style={
+                    styles.zuriPanelBadge
+                  }
+                >
+                  <Text
+                    style={
+                      styles.zuriPanelBadgeText
+                    }
+                  >
+                    POWERED BY KINX
+                  </Text>
+                </View>
+
+                <Text
+                  style={
+                    styles.zuriPanelHeadline
+                  }
+                >
+                  AFRICA IS BUILDING.
+                </Text>
+
+                <Text
+                  style={styles.zuriPanelText}
+                >
+                  We are not waiting for the
+                  future to arrive.
+                </Text>
+
+                <Text
+                  style={styles.zuriPanelText}
+                >
+                  We are building it — one idea,
+                  one creator, one line of code at
+                  a time.
+                </Text>
+
+                <View
+                  style={
+                    styles.zuriPanelDivider
+                  }
+                />
+
+                <Text
+                  style={
+                    styles.zuriPanelSubheadline
+                  }
+                >
+                  Zuri is only the beginning.
+                </Text>
+
+                <Text
+                  style={styles.zuriPanelText}
+                >
+                  A smarter, deeper and more
+                  powerful Zuri is coming.
+                </Text>
+
+                <View
+                  style={styles.zuriV2Card}
+                >
+                  <Text
+                    style={styles.zuriV2Small}
+                  >
+                    SOMETHING BIG IS COMING
+                  </Text>
+
+                  <Text
+                    style={styles.zuriV2Title}
+                  >
+                    WATCH OUT FOR
+                  </Text>
+
+                  <Text
+                    style={styles.zuriV2Logo}
+                  >
+                    ZURI V2
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.zuriV2Description
+                    }
+                  >
+                    The next chapter of
+                    African-built intelligence.
+                  </Text>
+                </View>
+
+                <View
+                  style={styles.zuriPanelQuote}
+                >
+                  <Text
+                    style={
+                      styles.zuriPanelQuoteText
+                    }
+                  >
+                    “The future isn't somewhere
+                    else.”
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.zuriPanelQuoteAccent
+                    }
+                  >
+                    IT'S BEING BUILT HERE.
+                  </Text>
+                </View>
+
+                <Text
+                  style={styles.zuriPanelFooter}
+                >
+                  KINX • INTELLIGENCE FOR THE FUTURE
+                </Text>
+              </ScrollView>
+            </View>
+          </View>
+        )}
     </View>
   );
 }
@@ -1598,6 +1807,7 @@ const styles = StyleSheet.create({
   appContainer: {
     flex: 1,
     flexDirection: "row",
+    backgroundColor: "#081216",
   },
 
   root: {
@@ -1628,7 +1838,12 @@ const styles = StyleSheet.create({
 
   mobileChatContent: {
     paddingTop: 6,
-    paddingBottom: 110,
+    paddingBottom: 90,
+    paddingHorizontal: 2,
+  },
+
+  smallPhoneChatContent: {
+    paddingBottom: 85,
   },
 
   /* ==========================
@@ -1732,6 +1947,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
 
+  mobileDisclaimer: {
+    fontSize: 9,
+    marginTop: 3,
+    marginBottom: 3,
+  },
+
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -1744,42 +1965,22 @@ const styles = StyleSheet.create({
   },
 
   mobileInputContainer: {
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 10,
-    minHeight: 62,
+    paddingHorizontal: 7,
+    paddingTop: 7,
+    paddingBottom: 8,
+    minHeight: 58,
   },
 
-  /* ==========================
-     ATTACH
-  ========================== */
-
-  attachButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 17,
-    backgroundColor: "#0D2025",
-    borderWidth: 1,
-    borderColor: "#28474D",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10,
+  smallPhoneInputContainer: {
+    paddingHorizontal: 5,
+    paddingTop: 6,
+    paddingBottom: 6,
   },
-
-  mobileAttachButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 6,
-  },
-
-  attachText: {
-    color: "#D7AD5A",
-    fontSize: 26,
-    fontWeight: "400",
-    lineHeight: 29,
-  },
-
+smallPhoneActionButton: {
+  width: 38,
+  height: 38,
+  borderRadius: 19,
+},
   /* ==========================
      INPUT
   ========================== */
@@ -1804,9 +2005,18 @@ const styles = StyleSheet.create({
     minHeight: 44,
     maxHeight: 110,
     borderRadius: 22,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     fontSize: 14,
+  },
+
+  smallPhoneInput: {
+    minHeight: 42,
+    maxHeight: 100,
+    borderRadius: 21,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13.5,
   },
 
   /* ==========================
@@ -1829,7 +2039,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    marginLeft: 6,
+    marginLeft: 5,
   },
 
   sendText: {
@@ -1863,8 +2073,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    marginLeft: 6,
-    marginRight: 4,
+    marginLeft: 5,
+    marginRight: 3,
   },
 
   micButtonRecording: {
@@ -1960,58 +2170,213 @@ const styles = StyleSheet.create({
   },
 
   /* ==========================
-     FILE PREVIEW
+     MOBILE HISTORY
   ========================== */
 
-  filePreview: {
+  mobileHistoryOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5000,
+    elevation: 50,
+    flexDirection: "row",
+  },
+
+  mobileHistoryBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.58)",
+  },
+
+  mobileHistoryPanel: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 310,
+    maxWidth: "84%",
+    backgroundColor: "#081216",
+    borderRightWidth: 1,
+    borderRightColor: "#1B3036",
+    shadowColor: "#000000",
+    shadowOffset: {
+      width: 8,
+      height: 0,
+    },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 30,
+    overflow: "hidden",
+  },
+
+  smallPhoneHistoryPanel: {
+    width: 285,
+    maxWidth: "82%",
+  },
+
+  mobileHistoryHeader: {
+    height: 66,
+    paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#0C1B20",
+    borderBottomWidth: 1,
+    borderBottomColor: "#182A30",
+    backgroundColor: "#081216",
+  },
+
+  mobileHistoryTitle: {
+    color: "#F5F3EC",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+
+  mobileHistoryClose: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0D1D22",
     borderWidth: 1,
-    borderColor: "#244047",
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    marginHorizontal: 30,
+    borderColor: "#1B3036",
+  },
+
+  mobileHistoryCloseText: {
+    color: "#B8C6C8",
+    fontSize: 25,
+    fontWeight: "300",
+    lineHeight: 27,
+  },
+
+  mobileHistoryContent: {
+    flex: 1,
+    overflow: "hidden",
+  },
+    zuriPanelContent: {
+    paddingHorizontal: 22,
+    paddingTop: 28,
+    paddingBottom: 40,
+  },
+
+  zuriPanelBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: "#10252A",
+    borderWidth: 1,
+    borderColor: "#1B444B",
+    marginBottom: 22,
+  },
+
+  zuriPanelBadgeText: {
+    color: "#38D9CF",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.3,
+  },
+
+  zuriPanelHeadline: {
+    color: "#F5F3EC",
+    fontSize: 28,
+    lineHeight: 33,
+    fontWeight: "900",
+    letterSpacing: -0.8,
+    marginBottom: 18,
+  },
+
+  zuriPanelText: {
+    color: "#AAB9BC",
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 13,
+  },
+
+  zuriPanelDivider: {
+    height: 1,
+    backgroundColor: "#193239",
+    marginVertical: 18,
+  },
+
+  zuriPanelSubheadline: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "800",
     marginBottom: 8,
   },
 
-  mobileFilePreview: {
-    marginHorizontal: 10,
-    marginBottom: 6,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+  zuriV2Card: {
+    marginTop: 20,
+    padding: 20,
+    borderRadius: 20,
+    backgroundColor: "#0D2025",
+    borderWidth: 1,
+    borderColor: "#1A3B42",
   },
 
-  fileInfo: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
+  zuriV2Small: {
+    color: "#38D9CF",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    marginBottom: 12,
   },
 
-  fileIcon: {
-    fontSize: 19,
-    marginRight: 10,
+  zuriV2Title: {
+    color: "#9BAAAD",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.2,
   },
 
-  fileName: {
-    flex: 1,
-    color: "#E9ECE8",
-    fontSize: 13,
-    fontWeight: "600",
+  zuriV2Logo: {
+    color: "#F5F3EC",
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: "900",
+    letterSpacing: -1,
+    marginTop: 2,
   },
 
-  removeFileButton: {
-    width: 30,
-    height: 30,
-    justifyContent: "center",
-    alignItems: "center",
+  zuriV2Description: {
+    color: "#829497",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 8,
   },
 
-  removeFileText: {
-    color: "#789094",
-    fontSize: 22,
+  zuriPanelQuote: {
+    marginTop: 28,
+    paddingLeft: 14,
+    borderLeftWidth: 2,
+    borderLeftColor: "#38D9CF",
+  },
+
+  zuriPanelQuoteText: {
+    color: "#DCE7E8",
+    fontSize: 15,
+    lineHeight: 22,
+    fontStyle: "italic",
+  },
+
+  zuriPanelQuoteAccent: {
+    color: "#38D9CF",
+    fontSize: 11,
+    lineHeight: 18,
+    fontWeight: "900",
+    letterSpacing: 1,
+    marginTop: 4,
+  },
+
+  zuriPanelFooter: {
+    color: "#4F666A",
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1.1,
+    textAlign: "center",
+    marginTop: 35,
   },
 });

@@ -12,6 +12,7 @@ import {
   Alert,
   Animated,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -32,7 +33,7 @@ import { auth } from "../firebase/firebaseConfig";
 WebBrowser.maybeCompleteAuthSession();
 
 export default function Login() {
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
 
   const isSmallPhone = width < 380;
   const isPhone = width < 600;
@@ -45,6 +46,9 @@ export default function Login() {
   const [focusedField, setFocusedField] = useState<
     "email" | "password" | null
   >(null);
+
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
 
   const fade = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(24)).current;
@@ -93,6 +97,8 @@ export default function Login() {
 
     try {
       setLoading(true);
+
+      Keyboard.dismiss();
 
       await loginUser(email.trim(), password);
 
@@ -179,6 +185,13 @@ export default function Login() {
     }
   };
 
+  // ==========================
+  // Email → Password
+  // ==========================
+  const focusPassword = () => {
+    passwordRef.current?.focus();
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar
@@ -196,25 +209,24 @@ export default function Login() {
         behavior={
           Platform.OS === "ios"
             ? "padding"
-            : "height"
+            : undefined
         }
       >
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={
-            Platform.OS === "ios"
-              ? "interactive"
-              : "on-drag"
-          }
-          contentContainerStyle={[
-            styles.content,
-            isPhone && styles.mobileContent,
-            isSmallPhone &&
-              styles.smallPhoneContent,
-          ]}
-          showsVerticalScrollIndicator={false}
-          automaticallyAdjustKeyboardInsets
-        >
+     <ScrollView
+  keyboardShouldPersistTaps="always"
+  keyboardDismissMode={
+    Platform.OS === "ios"
+      ? "interactive"
+      : "none"
+  }
+  contentContainerStyle={[
+    styles.content,
+    isPhone && styles.mobileContent,
+    isSmallPhone &&
+      styles.smallPhoneContent,
+  ]}
+  showsVerticalScrollIndicator={false}
+>
           <Animated.View
             style={[
               styles.authCard,
@@ -321,6 +333,7 @@ export default function Login() {
             </Text>
 
             <TextInput
+              ref={emailRef}
               style={[
                 styles.input,
                 isPhone && styles.mobileInput,
@@ -331,6 +344,7 @@ export default function Login() {
               placeholderTextColor="#738A8E"
               autoCapitalize="none"
               autoCorrect={false}
+              spellCheck={false}
               keyboardType="email-address"
               textContentType="emailAddress"
               autoComplete="email"
@@ -343,6 +357,8 @@ export default function Login() {
                 setFocusedField(null)
               }
               returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={focusPassword}
             />
 
             {/* ==========================
@@ -362,6 +378,7 @@ export default function Login() {
               ]}
             >
               <TextInput
+                ref={passwordRef}
                 style={[
                   styles.passwordInput,
                   isPhone &&
@@ -380,11 +397,12 @@ export default function Login() {
                 }
                 autoCapitalize="none"
                 autoCorrect={false}
+                spellCheck={false}
                 textContentType="password"
                 autoComplete="password"
                 keyboardType="default"
                 returnKeyType="done"
-                enablesReturnKeyAutomatically
+                blurOnSubmit={false}
                 onSubmitEditing={handleLogin}
               />
 
@@ -551,13 +569,13 @@ const styles = StyleSheet.create({
   },
 
   mobileContent: {
-    paddingHorizontal: 14,
-    paddingVertical: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 20,
   },
 
   smallPhoneContent: {
-    paddingHorizontal: 10,
-    paddingVertical: 18,
+    paddingHorizontal: 8,
+    paddingVertical: 14,
   },
 
   authCard: {
@@ -590,15 +608,15 @@ const styles = StyleSheet.create({
 
   mobileAuthCard: {
     maxWidth: 520,
-    borderRadius: 24,
-    paddingHorizontal: 18,
-    paddingVertical: 24,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 22,
   },
 
   smallPhoneAuthCard: {
-    borderRadius: 22,
-    paddingHorizontal: 14,
-    paddingVertical: 20,
+    borderRadius: 20,
+    paddingHorizontal: 13,
+    paddingVertical: 18,
   },
 
   logoContainer: {
@@ -607,7 +625,7 @@ const styles = StyleSheet.create({
   },
 
   mobileLogoContainer: {
-    marginBottom: 24,
+    marginBottom: 22,
   },
 
   logo: {
@@ -617,14 +635,14 @@ const styles = StyleSheet.create({
   },
 
   mobileLogo: {
-    width: 115,
-    height: 115,
-    marginBottom: 10,
+    width: 105,
+    height: 105,
+    marginBottom: 9,
   },
 
   smallPhoneLogo: {
-    width: 95,
-    height: 95,
+    width: 88,
+    height: 88,
   },
 
   title: {
@@ -635,11 +653,11 @@ const styles = StyleSheet.create({
   },
 
   mobileTitle: {
-    fontSize: 30,
+    fontSize: 29,
   },
 
   smallPhoneTitle: {
-    fontSize: 27,
+    fontSize: 26,
   },
 
   subtitle: {
@@ -653,11 +671,11 @@ const styles = StyleSheet.create({
   },
 
   mobileSubtitle: {
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 8,
-    marginBottom: 20,
-    paddingHorizontal: 8,
+    fontSize: 13.5,
+    lineHeight: 20,
+    marginTop: 7,
+    marginBottom: 18,
+    paddingHorizontal: 6,
   },
 
   googleButton: {
@@ -686,8 +704,8 @@ const styles = StyleSheet.create({
 
   mobileGoogleButton: {
     height: 52,
-    borderRadius: 16,
-    marginBottom: 20,
+    borderRadius: 15,
+    marginBottom: 18,
   },
 
   googleIcon: {
@@ -710,7 +728,7 @@ const styles = StyleSheet.create({
   dividerContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 22,
+    marginBottom: 20,
   },
 
   divider: {
@@ -732,8 +750,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 2,
-    marginBottom: 10,
-    marginTop: 8,
+    marginBottom: 8,
+    marginTop: 7,
   },
 
   input: {
@@ -751,15 +769,15 @@ const styles = StyleSheet.create({
 
     fontSize: 16,
 
-    marginBottom: 20,
+    marginBottom: 18,
   },
 
   mobileInput: {
     height: 54,
-    borderRadius: 16,
+    borderRadius: 15,
     paddingHorizontal: 16,
     fontSize: 15,
-    marginBottom: 16,
+    marginBottom: 14,
   },
 
   passwordContainer: {
@@ -773,7 +791,7 @@ const styles = StyleSheet.create({
 
     borderColor: "rgba(16,224,212,0.15)",
 
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
 
     flexDirection: "row",
 
@@ -782,8 +800,8 @@ const styles = StyleSheet.create({
 
   mobilePasswordContainer: {
     height: 54,
-    borderRadius: 16,
-    paddingHorizontal: 16,
+    borderRadius: 15,
+    paddingHorizontal: 14,
   },
 
   passwordInput: {
@@ -795,6 +813,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
 
     paddingVertical: 0,
+
+    includeFontPadding: false,
   },
 
   mobilePasswordInput: {
@@ -802,13 +822,13 @@ const styles = StyleSheet.create({
   },
 
   eyeButton: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
 
     alignItems: "center",
     justifyContent: "center",
 
-    marginLeft: 6,
+    marginLeft: 4,
   },
 
   inputFocused: {
@@ -831,10 +851,11 @@ const styles = StyleSheet.create({
   forgotButton: {
     alignSelf: "flex-end",
 
-    marginTop: 12,
-    marginBottom: 24,
+    marginTop: 11,
+    marginBottom: 20,
 
-    paddingVertical: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 2,
   },
 
   forgotText: {
@@ -869,7 +890,7 @@ const styles = StyleSheet.create({
 
   mobileLoginButton: {
     height: 54,
-    borderRadius: 16,
+    borderRadius: 15,
   },
 
   loginButtonText: {
@@ -884,7 +905,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
 
-    marginTop: 28,
+    marginTop: 25,
   },
 
   smallPhoneSignupRow: {
@@ -918,11 +939,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
 
-    marginTop: 50,
+    marginTop: 42,
   },
 
   mobileFooter: {
-    marginTop: 30,
+    marginTop: 26,
   },
 
   footerBrand: {

@@ -14,12 +14,10 @@ import AthenaLogo from "../components/ui/AthenaLogo";
 import BottomNav from "../components/ui/BottomNav";
 import { useConversation } from "../context/ConversationContext";
 import { auth } from "../firebase/firebaseConfig";
-import { getConversations } from "../hooks/conversationService";
-
-type Conversation = {
-  id: string;
-  title: string;
-};
+import {
+  getConversations,
+  Conversation,
+} from "../hooks/conversationService";
 
 export default function History() {
   const [conversations, setConversations] = useState<
@@ -79,19 +77,16 @@ export default function History() {
     conversationId: string
   ) => {
     setCurrentConversationId(conversationId);
-
     router.push("/chat");
   };
 
   const startNewChat = () => {
     setCurrentConversationId(null);
-
     router.push("/chat");
   };
 
   return (
     <View style={styles.root}>
-      {/* Decorative background glow */}
       <View style={styles.topGlow} />
 
       <ScrollView
@@ -99,12 +94,10 @@ export default function History() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Zuri Logo */}
         <View style={styles.logoSection}>
           <AthenaLogo />
         </View>
 
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.eyebrow}>
             YOUR CONVERSATIONS
@@ -120,7 +113,6 @@ export default function History() {
           </Text>
         </View>
 
-        {/* New Chat */}
         <TouchableOpacity
           style={styles.newChatButton}
           activeOpacity={0.85}
@@ -147,7 +139,6 @@ export default function History() {
           </Text>
         </TouchableOpacity>
 
-        {/* Conversation List */}
         <View style={styles.historySection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
@@ -176,7 +167,7 @@ export default function History() {
             <View style={styles.emptyCard}>
               <View style={styles.emptyIcon}>
                 <Text style={styles.emptyIconText}>
-                  ◇
+                  ◌
                 </Text>
               </View>
 
@@ -234,7 +225,7 @@ export default function History() {
                             styles.activeConversationIconText,
                         ]}
                       >
-                        ◇
+                        ◌
                       </Text>
                     </View>
 
