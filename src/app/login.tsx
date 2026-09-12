@@ -20,30 +20,19 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions,
 } from "react-native";
 
 import ZuriLogo from "../asset/images/zuri-icon.png (2).png";
-import AfricaBackground from "../components/home-v2/AfricaBackground";
 import { loginUser } from "../firebase/auth";
 import { auth } from "../firebase/firebaseConfig";
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function Login() {
-  const { width } = useWindowDimensions();
-
-  const isSmallPhone = width < 380;
-  const isPhone = width < 600;
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  const [focusedField, setFocusedField] = useState<
-    "email" | "password" | null
-  >(null);
 
   const [request, response, promptAsync] =
     Google.useAuthRequest({
@@ -58,8 +47,9 @@ export default function Login() {
     });
 
   // ==========================
-  // Google Login Response
+  // GOOGLE RESPONSE
   // ==========================
+
   useEffect(() => {
     const signInWithGoogle = async () => {
       if (response?.type !== "success") return;
@@ -107,8 +97,9 @@ export default function Login() {
   }, [response]);
 
   // ==========================
-  // Email Login
+  // EMAIL LOGIN
   // ==========================
+
   const handleLogin = async () => {
     if (!email.trim() || !password) {
       Alert.alert(
@@ -141,14 +132,13 @@ export default function Login() {
   };
 
   // ==========================
-  // Google Login
+  // GOOGLE LOGIN
   // ==========================
+
   const handleGoogleSignIn = async () => {
     if (loading) return;
 
     try {
-      setLoading(true);
-
       await promptAsync({
         showInRecents: true,
       });
@@ -158,357 +148,186 @@ export default function Login() {
         error?.message ??
           "Unable to sign in with Google."
       );
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
     <View style={styles.container}>
       <StatusBar
-        barStyle="light-content"
-        backgroundColor="#071114"
+        barStyle="dark-content"
+        backgroundColor="#FFFFFF"
       />
-
-      {/* ==========================
-          BACKGROUND
-      ========================== */}
-
-      <View
-        pointerEvents="none"
-        style={StyleSheet.absoluteFill}
-      >
-        <AfricaBackground />
-      </View>
-
-      <View
-        pointerEvents="none"
-        style={styles.topGlow}
-      />
-
-      <View
-        pointerEvents="none"
-        style={styles.bottomGlow}
-      />
-
-      {/* ==========================
-          CONTENT
-      ========================== */}
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.content,
-          isPhone && styles.mobileContent,
-          isSmallPhone &&
-            styles.smallPhoneContent,
-        ]}
+        contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode={
-          Platform.OS === "ios"
-            ? "interactive"
-            : "none"
-        }
         showsVerticalScrollIndicator={false}
       >
-        <View
-          style={[
-            styles.authContainer,
-            isPhone &&
-              styles.mobileAuthContainer,
-          ]}
-        >
-          {/* ==========================
-              LOGO
-          ========================== */}
+        <View style={styles.formContainer}>
 
-          <View
-            style={[
-              styles.logoSection,
-              isPhone &&
-                styles.mobileLogoSection,
-            ]}
-          >
+          {/* LOGO */}
+
+          <View style={styles.logoContainer}>
             <Image
               source={ZuriLogo}
-              style={[
-                styles.logo,
-                isPhone &&
-                  styles.mobileLogo,
-                isSmallPhone &&
-                  styles.smallPhoneLogo,
-              ]}
+              style={styles.logo}
               resizeMode="contain"
             />
 
-            <Text
-              style={[
-                styles.title,
-                isPhone &&
-                  styles.mobileTitle,
-                isSmallPhone &&
-                  styles.smallPhoneTitle,
-              ]}
-            >
+            <Text style={styles.title}>
               Welcome Back
             </Text>
 
-            <Text
-              style={[
-                styles.subtitle,
-                isPhone &&
-                  styles.mobileSubtitle,
-              ]}
-            >
-              Your AI. Your future.
+            <Text style={styles.subtitle}>
+              Sign in to continue to Zuri
             </Text>
           </View>
 
-          {/* ==========================
-              FORM
-          ========================== */}
+          {/* EMAIL */}
 
-          <View style={styles.form}>
-            {/* EMAIL */}
+          <Text style={styles.label}>
+            Email
+          </Text>
 
-            <Text style={styles.label}>
-              EMAIL
-            </Text>
+          <View style={styles.inputContainer}>
+            <Ionicons
+              name="mail-outline"
+              size={20}
+              color="#68777A"
+              style={styles.inputIcon}
+            />
 
-            <View
-              style={[
-                styles.inputWrapper,
-                isPhone &&
-                  styles.mobileInputWrapper,
-                focusedField === "email" &&
-                  styles.inputWrapperFocused,
-              ]}
-            >
-              <Ionicons
-                name="mail-outline"
-                size={19}
-                color={
-                  focusedField === "email"
-                    ? "#10E0D4"
-                    : "#738A8E"
-                }
-                style={styles.inputIcon}
-              />
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your email"
+              placeholderTextColor="#8A9799"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              keyboardType="email-address"
+              importantForAutofill="no"
+              returnKeyType="next"
+            />
+          </View>
 
-              <TextInput
-                style={styles.textInput}
-                placeholder="Enter your email"
-                placeholderTextColor="#738A8E"
-                autoCapitalize="none"
-                autoCorrect={false}
-                spellCheck={false}
-                keyboardType="email-address"
-                importantForAutofill="no"
-                value={email}
-                onChangeText={setEmail}
-                onFocus={() =>
-                  setFocusedField("email")
-                }
-                onBlur={() =>
-                  setFocusedField(null)
-                }
-                returnKeyType="next"
-              />
-            </View>
+          {/* PASSWORD */}
 
-            {/* PASSWORD */}
+          <Text style={styles.label}>
+            Password
+          </Text>
 
-            <Text
-              style={[
-                styles.label,
-                styles.passwordLabel,
-              ]}
-            >
-              PASSWORD
-            </Text>
+          <View style={styles.inputContainer}>
+            <Ionicons
+              name="lock-closed-outline"
+              size={20}
+              color="#68777A"
+              style={styles.inputIcon}
+            />
 
-            <View
-              style={[
-                styles.inputWrapper,
-                isPhone &&
-                  styles.mobileInputWrapper,
-                focusedField === "password" &&
-                  styles.inputWrapperFocused,
-              ]}
-            >
-              <Ionicons
-                name="lock-closed-outline"
-                size={19}
-                color={
-                  focusedField === "password"
-                    ? "#10E0D4"
-                    : "#738A8E"
-                }
-                style={styles.inputIcon}
-              />
-
-              <TextInput
-                style={styles.textInput}
-                placeholder="Enter your password"
-                placeholderTextColor="#738A8E"
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-                spellCheck={false}
-                keyboardType="default"
-                importantForAutofill="no"
-                value={password}
-                onChangeText={setPassword}
-                onFocus={() =>
-                  setFocusedField("password")
-                }
-                onBlur={() =>
-                  setFocusedField(null)
-                }
-                returnKeyType="done"
-                onSubmitEditing={handleLogin}
-              />
-
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() =>
-                  setShowPassword(
-                    (previous) => !previous
-                  )
-                }
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={
-                    showPassword
-                      ? "eye-off-outline"
-                      : "eye-outline"
-                  }
-                  size={21}
-                  color="#8AA6AA"
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* FORGOT PASSWORD */}
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your password"
+              placeholderTextColor="#8A9799"
+              value={password}
+              onChangeText={setPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              secureTextEntry={!showPassword}
+              importantForAutofill="no"
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
+            />
 
             <TouchableOpacity
-              style={styles.forgotButton}
+              style={styles.eyeButton}
               onPress={() =>
-                router.push(
-                  "/forgot-password"
+                setShowPassword(
+                  (previous) => !previous
                 )
               }
               activeOpacity={0.7}
             >
-              <Text style={styles.forgotText}>
-                Forgot password?
-              </Text>
-            </TouchableOpacity>
-
-            {/* SIGN IN */}
-
-            <TouchableOpacity
-              style={[
-                styles.loginButton,
-                isPhone &&
-                  styles.mobileLoginButton,
-              ]}
-              onPress={handleLogin}
-              disabled={loading}
-              activeOpacity={0.85}
-            >
-              {loading ? (
-                <ActivityIndicator
-                  color="#061014"
-                />
-              ) : (
-                <>
-                  <Text
-                    style={styles.loginButtonText}
-                  >
-                    Sign In
-                  </Text>
-
-                  <Ionicons
-                    name="arrow-forward"
-                    size={19}
-                    color="#061014"
-                  />
-                </>
-              )}
+              <Ionicons
+                name={
+                  showPassword
+                    ? "eye-off-outline"
+                    : "eye-outline"
+                }
+                size={21}
+                color="#68777A"
+              />
             </TouchableOpacity>
           </View>
 
-          {/* ==========================
-              DIVIDER
-          ========================== */}
+          {/* FORGOT PASSWORD */}
 
-          <View
-            style={[
-              styles.dividerContainer,
-              isPhone &&
-                styles.mobileDividerContainer,
-            ]}
+          <TouchableOpacity
+            style={styles.forgotButton}
+            onPress={() =>
+              router.push("/forgot-password")
+            }
+            activeOpacity={0.7}
           >
+            <Text style={styles.forgotText}>
+              Forgot password?
+            </Text>
+          </TouchableOpacity>
+
+          {/* SIGN IN */}
+
+          <TouchableOpacity
+            style={styles.signInButton}
+            onPress={handleLogin}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            {loading ? (
+              <ActivityIndicator
+                color="#FFFFFF"
+              />
+            ) : (
+              <Text style={styles.signInText}>
+                Sign In
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* DIVIDER */}
+
+          <View style={styles.dividerRow}>
             <View style={styles.divider} />
 
-            <Text style={styles.dividerText}>
+            <Text style={styles.orText}>
               OR
             </Text>
 
             <View style={styles.divider} />
           </View>
 
-          {/* ==========================
-              GOOGLE
-          ========================== */}
+          {/* GOOGLE */}
 
           <TouchableOpacity
-            style={[
-              styles.googleButton,
-              isPhone &&
-                styles.mobileGoogleButton,
-            ]}
-            activeOpacity={0.85}
+            style={styles.googleButton}
             onPress={handleGoogleSignIn}
             disabled={!request || loading}
+            activeOpacity={0.85}
           >
-            <View style={styles.googleIconBox}>
-              <Text style={styles.googleIcon}>
-                G
-              </Text>
-            </View>
+            <Text style={styles.googleG}>
+              G
+            </Text>
 
-            <Text
-              style={[
-                styles.googleText,
-                isSmallPhone &&
-                  styles.smallPhoneGoogleText,
-              ]}
-            >
+            <Text style={styles.googleText}>
               Continue with Google
             </Text>
           </TouchableOpacity>
 
-          {/* ==========================
-              SIGN UP
-          ========================== */}
+          {/* SIGN UP */}
 
-          <View
-            style={[
-              styles.signupRow,
-              isSmallPhone &&
-                styles.smallPhoneSignupRow,
-            ]}
-          >
-            <Text
-              style={[
-                styles.signupText,
-                isSmallPhone &&
-                  styles.smallPhoneSignupText,
-              ]}
-            >
+          <View style={styles.signupRow}>
+            <Text style={styles.signupText}>
               Don't have an account?
             </Text>
 
@@ -516,36 +335,16 @@ export default function Login() {
               onPress={() =>
                 router.push("/signup")
               }
-              hitSlop={{
-                top: 8,
-                bottom: 8,
-                left: 8,
-                right: 8,
-              }}
             >
-              <Text
-                style={[
-                  styles.signupLink,
-                  isSmallPhone &&
-                    styles.smallPhoneSignupLink,
-                ]}
-              >
+              <Text style={styles.signupLink}>
                 Create Account
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* ==========================
-              FOOTER
-          ========================== */}
+          {/* FOOTER */}
 
-          <View
-            style={[
-              styles.footer,
-              isPhone &&
-                styles.mobileFooter,
-            ]}
-          >
+          <View style={styles.footer}>
             <Text style={styles.footerBrand}>
               ZURI
             </Text>
@@ -558,6 +357,7 @@ export default function Login() {
               Powered by KYNX
             </Text>
           </View>
+
         </View>
       </ScrollView>
     </View>
@@ -567,384 +367,236 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#071114",
-  },
-
-  scroll: {
-    flex: 1,
+    backgroundColor: "#FFFFFF",
   },
 
   content: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 28,
-    paddingVertical: 45,
+    paddingHorizontal: 24,
+    paddingVertical: 40,
   },
 
-  mobileContent: {
-    paddingHorizontal: 18,
-    paddingVertical: 28,
-  },
-
-  smallPhoneContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 22,
-  },
-
-  authContainer: {
+  formContainer: {
     width: "100%",
-    maxWidth: 470,
+    maxWidth: 440,
     alignSelf: "center",
   },
 
-  mobileAuthContainer: {
-    maxWidth: 470,
-  },
+  // ==========================
+  // LOGO
+  // ==========================
 
-  /* ==========================
-     LOGO
-  ========================== */
-
-  logoSection: {
+  logoContainer: {
     alignItems: "center",
     marginBottom: 34,
   },
 
-  mobileLogoSection: {
-    marginBottom: 28,
-  },
-
   logo: {
-    width: 150,
-    height: 150,
-    marginBottom: 12,
-  },
-
-  mobileLogo: {
-    width: 92,
-    height: 92,
-    marginBottom: 8,
-  },
-
-  smallPhoneLogo: {
-    width: 78,
-    height: 78,
+    width: 105,
+    height: 105,
+    marginBottom: 15,
   },
 
   title: {
-    color: "#FFFFFF",
-    fontSize: 38,
-    fontWeight: "900",
+    color: "#071114",
+    fontSize: 31,
+    fontWeight: "800",
     textAlign: "center",
-    letterSpacing: -0.8,
-  },
-
-  mobileTitle: {
-    fontSize: 30,
     letterSpacing: -0.5,
   },
 
-  smallPhoneTitle: {
-    fontSize: 27,
-  },
-
   subtitle: {
-    color: "#AFC4C8",
-    fontSize: 15,
+    color: "#68777A",
+    fontSize: 14,
     textAlign: "center",
-    marginTop: 8,
+    marginTop: 7,
   },
 
-  mobileSubtitle: {
-    fontSize: 13.5,
-    marginTop: 6,
-  },
-
-  /* ==========================
-     FORM
-  ========================== */
-
-  form: {
-    width: "100%",
-  },
+  // ==========================
+  // LABELS
+  // ==========================
 
   label: {
-    color: "#10E0D4",
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 2,
+    color: "#071114",
+    fontSize: 13,
+    fontWeight: "700",
     marginBottom: 8,
+    marginTop: 16,
   },
 
-  passwordLabel: {
-    marginTop: 18,
-  },
+  // ==========================
+  // INPUT
+  // ==========================
 
-  inputWrapper: {
+  inputContainer: {
+    height: 56,
     width: "100%",
-    height: 58,
-    borderRadius: 17,
     borderWidth: 1,
-    borderColor: "rgba(16,224,212,0.16)",
-    backgroundColor: "rgba(255,255,255,0.045)",
+    borderColor: "#D7E0E1",
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 15,
-  },
-
-  mobileInputWrapper: {
-    height: 55,
-    borderRadius: 15,
-  },
-
-  inputWrapperFocused: {
-    borderColor: "#10E0D4",
-    backgroundColor: "rgba(16,224,212,0.055)",
-    shadowColor: "#10E0D4",
-    shadowOpacity: 0.22,
-    shadowRadius: 12,
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    elevation: 5,
+    paddingHorizontal: 14,
   },
 
   inputIcon: {
-    marginRight: 11,
+    marginRight: 10,
   },
 
-  textInput: {
+  input: {
     flex: 1,
-    minWidth: 0,
     height: "100%",
-    color: "#FFFFFF",
+    color: "#071114",
     fontSize: 15,
     paddingVertical: 0,
   },
 
   eyeButton: {
     width: 40,
-    height: 40,
+    height: 45,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 4,
   },
+
+  // ==========================
+  // FORGOT
+  // ==========================
 
   forgotButton: {
     alignSelf: "flex-end",
-    paddingVertical: 9,
-    paddingLeft: 8,
-    marginBottom: 14,
+    paddingVertical: 10,
   },
 
   forgotText: {
-    color: "#D4A72C",
-    fontSize: 12.5,
-    fontWeight: "700",
+    color: "#087F78",
+    fontSize: 13,
+    fontWeight: "600",
   },
 
-  /* ==========================
-     SIGN IN
-  ========================== */
+  // ==========================
+  // SIGN IN
+  // ==========================
 
-  loginButton: {
+  signInButton: {
+    height: 56,
     width: "100%",
-    height: 58,
-    borderRadius: 17,
-    backgroundColor: "#D4A72C",
-    flexDirection: "row",
-    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "#071114",
     alignItems: "center",
-    gap: 9,
-    shadowColor: "#D4A72C",
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    elevation: 8,
+    justifyContent: "center",
+    marginTop: 8,
   },
 
-  mobileLoginButton: {
-    height: 55,
-    borderRadius: 15,
-  },
-
-  loginButtonText: {
-    color: "#061014",
+  signInText: {
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: "900",
-    letterSpacing: 0.4,
+    fontWeight: "800",
   },
 
-  /* ==========================
-     DIVIDER
-  ========================== */
+  // ==========================
+  // DIVIDER
+  // ==========================
 
-  dividerContainer: {
-    width: "100%",
+  dividerRow: {
     flexDirection: "row",
     alignItems: "center",
     marginVertical: 25,
   },
 
-  mobileDividerContainer: {
-    marginVertical: 21,
-  },
-
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor: "#244247",
+    backgroundColor: "#E1E7E8",
   },
 
-  dividerText: {
-    color: "#738A8E",
-    marginHorizontal: 13,
+  orText: {
+    color: "#8A9799",
+    fontSize: 11,
     fontWeight: "700",
-    fontSize: 10,
-    letterSpacing: 1.5,
+    marginHorizontal: 14,
+    letterSpacing: 1,
   },
 
-  /* ==========================
-     GOOGLE
-  ========================== */
+  // ==========================
+  // GOOGLE
+  // ==========================
 
   googleButton: {
-    width: "100%",
     height: 56,
-    borderRadius: 17,
+    width: "100%",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D7E0E1",
     backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    elevation: 5,
   },
 
-  mobileGoogleButton: {
-    height: 53,
-    borderRadius: 15,
-  },
-
-  googleIconBox: {
-    width: 27,
-    height: 27,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 9,
-  },
-
-  googleIcon: {
+  googleG: {
     color: "#4285F4",
-    fontSize: 21,
+    fontSize: 20,
     fontWeight: "900",
+    marginRight: 10,
   },
 
   googleText: {
     color: "#202124",
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: "700",
   },
 
-  smallPhoneGoogleText: {
-    fontSize: 13,
-  },
-
-  /* ==========================
-     SIGN UP
-  ========================== */
+  // ==========================
+  // SIGN UP
+  // ==========================
 
   signupRow: {
     flexDirection: "row",
-    justifyContent: "center",
     alignItems: "center",
-    marginTop: 25,
-  },
-
-  smallPhoneSignupRow: {
-    flexWrap: "wrap",
-    rowGap: 4,
-    paddingHorizontal: 5,
+    justifyContent: "center",
+    marginTop: 26,
   },
 
   signupText: {
-    color: "#819396",
+    color: "#68777A",
     fontSize: 13,
-  },
-
-  smallPhoneSignupText: {
-    fontSize: 12,
   },
 
   signupLink: {
-    color: "#10E0D4",
+    color: "#087F78",
     fontSize: 13,
     fontWeight: "800",
-    marginLeft: 6,
+    marginLeft: 5,
   },
 
-  smallPhoneSignupLink: {
-    fontSize: 12,
-  },
-
-  /* ==========================
-     FOOTER
-  ========================== */
+  // ==========================
+  // FOOTER
+  // ==========================
 
   footer: {
     flexDirection: "row",
-    justifyContent: "center",
     alignItems: "center",
-    marginTop: 32,
-  },
-
-  mobileFooter: {
-    marginTop: 25,
+    justifyContent: "center",
+    marginTop: 34,
   },
 
   footerBrand: {
     color: "#D4A72C",
-    fontWeight: "900",
     fontSize: 11,
+    fontWeight: "900",
     letterSpacing: 2,
   },
 
   footerDot: {
-    color: "#5D7377",
-    marginHorizontal: 9,
+    color: "#A7B3B5",
     fontSize: 11,
+    marginHorizontal: 8,
   },
 
   footerText: {
-    color: "#738A8E",
+    color: "#8A9799",
     fontSize: 11,
-  },
-
-  /* ==========================
-     BACKGROUND
-  ========================== */
-
-  topGlow: {
-    position: "absolute",
-    top: -220,
-    alignSelf: "center",
-    width: 520,
-    height: 520,
-    borderRadius: 260,
-    backgroundColor:
-      "rgba(16,224,212,0.06)",
-  },
-
-  bottomGlow: {
-    position: "absolute",
-    bottom: -180,
-    right: -100,
-    width: 380,
-    height: 380,
-    borderRadius: 190,
-    backgroundColor:
-      "rgba(217,164,65,0.05)",
   },
 });
