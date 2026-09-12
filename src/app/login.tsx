@@ -81,7 +81,7 @@ export default function Login() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fade, translateY]);
 
   // ==========================
   // Email Login
@@ -189,7 +189,9 @@ export default function Login() {
   // Email → Password
   // ==========================
   const focusPassword = () => {
-    passwordRef.current?.focus();
+    requestAnimationFrame(() => {
+      passwordRef.current?.focus();
+    });
   };
 
   return (
@@ -212,21 +214,21 @@ export default function Login() {
             : undefined
         }
       >
-     <ScrollView
-  keyboardShouldPersistTaps="always"
-  keyboardDismissMode={
-    Platform.OS === "ios"
-      ? "interactive"
-      : "none"
-  }
-  contentContainerStyle={[
-    styles.content,
-    isPhone && styles.mobileContent,
-    isSmallPhone &&
-      styles.smallPhoneContent,
-  ]}
-  showsVerticalScrollIndicator={false}
->
+        <ScrollView
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode={
+            Platform.OS === "ios"
+              ? "interactive"
+              : "none"
+          }
+          contentContainerStyle={[
+            styles.content,
+            isPhone && styles.mobileContent,
+            isSmallPhone &&
+              styles.smallPhoneContent,
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
           <Animated.View
             style={[
               styles.authCard,
@@ -398,11 +400,13 @@ export default function Login() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 spellCheck={false}
-                textContentType="password"
-                autoComplete="password"
                 keyboardType="default"
                 returnKeyType="done"
-                blurOnSubmit={false}
+                onPressIn={() => {
+                  requestAnimationFrame(() => {
+                    passwordRef.current?.focus();
+                  });
+                }}
                 onSubmitEditing={handleLogin}
               />
 
