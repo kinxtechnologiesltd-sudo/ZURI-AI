@@ -6,14 +6,12 @@ import {
   GoogleAuthProvider,
   signInWithCredential,
 } from "firebase/auth";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Animated,
   Image,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
@@ -21,8 +19,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
+  useWindowDimensions,
 } from "react-native";
 
 import ZuriLogo from "../asset/images/zuri-icon.png (2).png";
@@ -47,12 +45,6 @@ export default function Login() {
     "email" | "password" | null
   >(null);
 
-  const emailRef = useRef<TextInput>(null);
-  const passwordRef = useRef<TextInput>(null);
-
-  const fade = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(24)).current;
-
   const [request, response, promptAsync] =
     Google.useAuthRequest({
       androidClientId:
@@ -64,54 +56,6 @@ export default function Login() {
       webClientId:
         "261432661731-gm32ncu7rvrtal301v33mgqmmdb1b0pg.apps.googleusercontent.com",
     });
-
-  // ==========================
-  // Intro Animation
-  // ==========================
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fade, {
-        toValue: 1,
-        duration: 700,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 700,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [fade, translateY]);
-
-  // ==========================
-  // Email Login
-  // ==========================
-  const handleLogin = async () => {
-    if (!email.trim() || !password) {
-      Alert.alert(
-        "Missing Information",
-        "Please enter your email and password."
-      );
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      Keyboard.dismiss();
-
-      await loginUser(email.trim(), password);
-
-      router.replace("/home");
-    } catch (error: any) {
-      Alert.alert(
-        "Login Failed",
-        error?.message ?? "Unable to sign in."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // ==========================
   // Google Login Response
@@ -163,6 +107,40 @@ export default function Login() {
   }, [response]);
 
   // ==========================
+  // Email Login
+  // ==========================
+  const handleLogin = async () => {
+    if (!email.trim() || !password) {
+      Alert.alert(
+        "Missing Information",
+        "Please enter your email and password."
+      );
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      Keyboard.dismiss();
+
+      await loginUser(
+        email.trim(),
+        password
+      );
+
+      router.replace("/home");
+    } catch (error: any) {
+      Alert.alert(
+        "Login Failed",
+        error?.message ??
+          "Unable to sign in."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==========================
   // Google Login
   // ==========================
   const handleGoogleSignIn = async () => {
@@ -185,15 +163,6 @@ export default function Login() {
     }
   };
 
-  // ==========================
-  // Email → Password
-  // ==========================
-  const focusPassword = () => {
-    requestAnimationFrame(() => {
-      passwordRef.current?.focus();
-    });
-  };
-
   return (
     <View style={styles.container}>
       <StatusBar
@@ -201,194 +170,193 @@ export default function Login() {
         backgroundColor="#071114"
       />
 
-      <AfricaBackground />
+      {/* ==========================
+          BACKGROUND
+      ========================== */}
 
-      <View style={styles.topGlow} />
-      <View style={styles.bottomGlow} />
-
-      <KeyboardAvoidingView
-        style={styles.keyboardContainer}
-        behavior={
-          Platform.OS === "ios"
-            ? "padding"
-            : undefined
-        }
+      <View
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
       >
-        <ScrollView
-          keyboardShouldPersistTaps="always"
-          keyboardDismissMode={
-            Platform.OS === "ios"
-              ? "interactive"
-              : "none"
-          }
-          contentContainerStyle={[
-            styles.content,
-            isPhone && styles.mobileContent,
-            isSmallPhone &&
-              styles.smallPhoneContent,
+        <AfricaBackground />
+      </View>
+
+      <View
+        pointerEvents="none"
+        style={styles.topGlow}
+      />
+
+      <View
+        pointerEvents="none"
+        style={styles.bottomGlow}
+      />
+
+      {/* ==========================
+          CONTENT
+      ========================== */}
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.content,
+          isPhone && styles.mobileContent,
+          isSmallPhone &&
+            styles.smallPhoneContent,
+        ]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={
+          Platform.OS === "ios"
+            ? "interactive"
+            : "none"
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        <View
+          style={[
+            styles.authContainer,
+            isPhone &&
+              styles.mobileAuthContainer,
           ]}
-          showsVerticalScrollIndicator={false}
         >
-          <Animated.View
+          {/* ==========================
+              LOGO
+          ========================== */}
+
+          <View
             style={[
-              styles.authCard,
-              isPhone && styles.mobileAuthCard,
-              isSmallPhone &&
-                styles.smallPhoneAuthCard,
-              {
-                opacity: fade,
-                transform: [{ translateY }],
-              },
+              styles.logoSection,
+              isPhone &&
+                styles.mobileLogoSection,
             ]}
           >
-            {/* ==========================
-                LOGO
-            ========================== */}
-            <View
+            <Image
+              source={ZuriLogo}
               style={[
-                styles.logoContainer,
+                styles.logo,
                 isPhone &&
-                  styles.mobileLogoContainer,
+                  styles.mobileLogo,
+                isSmallPhone &&
+                  styles.smallPhoneLogo,
+              ]}
+              resizeMode="contain"
+            />
+
+            <Text
+              style={[
+                styles.title,
+                isPhone &&
+                  styles.mobileTitle,
+                isSmallPhone &&
+                  styles.smallPhoneTitle,
               ]}
             >
-              <Image
-                source={ZuriLogo}
-                style={[
-                  styles.logo,
-                  isPhone && styles.mobileLogo,
-                  isSmallPhone &&
-                    styles.smallPhoneLogo,
-                ]}
-                resizeMode="contain"
-              />
+              Welcome Back
+            </Text>
 
-              <Text
-                style={[
-                  styles.title,
-                  isPhone && styles.mobileTitle,
-                  isSmallPhone &&
-                    styles.smallPhoneTitle,
-                ]}
-              >
-                Welcome Back
-              </Text>
-
-              <Text
-                style={[
-                  styles.subtitle,
-                  isPhone && styles.mobileSubtitle,
-                ]}
-              >
-                Africa's Creative Intelligence awaits.
-                Continue creating with the future of AI.
-              </Text>
-            </View>
-
-            {/* ==========================
-                GOOGLE
-            ========================== */}
-            <TouchableOpacity
+            <Text
               style={[
-                styles.googleButton,
+                styles.subtitle,
                 isPhone &&
-                  styles.mobileGoogleButton,
+                  styles.mobileSubtitle,
               ]}
-              activeOpacity={0.85}
-              onPress={handleGoogleSignIn}
-              disabled={!request || loading}
             >
-              <Text style={styles.googleIcon}>
-                G
-              </Text>
+              Your AI. Your future.
+            </Text>
+          </View>
 
-              <Text
-                style={[
-                  styles.googleText,
-                  isSmallPhone &&
-                    styles.smallPhoneGoogleText,
-                ]}
-              >
-                Continue with Google
-              </Text>
-            </TouchableOpacity>
+          {/* ==========================
+              FORM
+          ========================== */}
 
-            {/* ==========================
-                DIVIDER
-            ========================== */}
-            <View
-              style={styles.dividerContainer}
-            >
-              <View style={styles.divider} />
+          <View style={styles.form}>
+            {/* EMAIL */}
 
-              <Text style={styles.dividerText}>
-                OR
-              </Text>
-
-              <View style={styles.divider} />
-            </View>
-
-            {/* ==========================
-                EMAIL
-            ========================== */}
             <Text style={styles.label}>
               EMAIL
             </Text>
 
-            <TextInput
-              ref={emailRef}
+            <View
               style={[
-                styles.input,
-                isPhone && styles.mobileInput,
+                styles.inputWrapper,
+                isPhone &&
+                  styles.mobileInputWrapper,
                 focusedField === "email" &&
-                  styles.inputFocused,
+                  styles.inputWrapperFocused,
               ]}
-              placeholder="Enter your email"
-              placeholderTextColor="#738A8E"
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              autoComplete="email"
-              value={email}
-              onChangeText={setEmail}
-              onFocus={() =>
-                setFocusedField("email")
-              }
-              onBlur={() =>
-                setFocusedField(null)
-              }
-              returnKeyType="next"
-              blurOnSubmit={false}
-              onSubmitEditing={focusPassword}
-            />
+            >
+              <Ionicons
+                name="mail-outline"
+                size={19}
+                color={
+                  focusedField === "email"
+                    ? "#10E0D4"
+                    : "#738A8E"
+                }
+                style={styles.inputIcon}
+              />
 
-            {/* ==========================
-                PASSWORD
-            ========================== */}
-            <Text style={styles.label}>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter your email"
+                placeholderTextColor="#738A8E"
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
+                keyboardType="email-address"
+                importantForAutofill="no"
+                value={email}
+                onChangeText={setEmail}
+                onFocus={() =>
+                  setFocusedField("email")
+                }
+                onBlur={() =>
+                  setFocusedField(null)
+                }
+                returnKeyType="next"
+              />
+            </View>
+
+            {/* PASSWORD */}
+
+            <Text
+              style={[
+                styles.label,
+                styles.passwordLabel,
+              ]}
+            >
               PASSWORD
             </Text>
 
             <View
               style={[
-                styles.passwordContainer,
+                styles.inputWrapper,
                 isPhone &&
-                  styles.mobilePasswordContainer,
+                  styles.mobileInputWrapper,
                 focusedField === "password" &&
-                  styles.inputFocused,
+                  styles.inputWrapperFocused,
               ]}
             >
+              <Ionicons
+                name="lock-closed-outline"
+                size={19}
+                color={
+                  focusedField === "password"
+                    ? "#10E0D4"
+                    : "#738A8E"
+                }
+                style={styles.inputIcon}
+              />
+
               <TextInput
-                ref={passwordRef}
-                style={[
-                  styles.passwordInput,
-                  isPhone &&
-                    styles.mobilePasswordInput,
-                ]}
+                style={styles.textInput}
                 placeholder="Enter your password"
                 placeholderTextColor="#738A8E"
                 secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
+                keyboardType="default"
+                importantForAutofill="no"
                 value={password}
                 onChangeText={setPassword}
                 onFocus={() =>
@@ -397,16 +365,7 @@ export default function Login() {
                 onBlur={() =>
                   setFocusedField(null)
                 }
-                autoCapitalize="none"
-                autoCorrect={false}
-                spellCheck={false}
-                keyboardType="default"
                 returnKeyType="done"
-                onPressIn={() => {
-                  requestAnimationFrame(() => {
-                    passwordRef.current?.focus();
-                  });
-                }}
                 onSubmitEditing={handleLogin}
               />
 
@@ -418,12 +377,6 @@ export default function Login() {
                   )
                 }
                 activeOpacity={0.7}
-                hitSlop={{
-                  top: 10,
-                  bottom: 10,
-                  left: 10,
-                  right: 10,
-                }}
               >
                 <Ionicons
                   name={
@@ -431,30 +384,30 @@ export default function Login() {
                       ? "eye-off-outline"
                       : "eye-outline"
                   }
-                  size={22}
+                  size={21}
                   color="#8AA6AA"
                 />
               </TouchableOpacity>
             </View>
 
-            {/* ==========================
-                FORGOT PASSWORD
-            ========================== */}
+            {/* FORGOT PASSWORD */}
+
             <TouchableOpacity
               style={styles.forgotButton}
               onPress={() =>
-                router.push("/forgot-password")
+                router.push(
+                  "/forgot-password"
+                )
               }
               activeOpacity={0.7}
             >
               <Text style={styles.forgotText}>
-                Forgot Password?
+                Forgot password?
               </Text>
             </TouchableOpacity>
 
-            {/* ==========================
-                SIGN IN
-            ========================== */}
+            {/* SIGN IN */}
+
             <TouchableOpacity
               style={[
                 styles.loginButton,
@@ -470,87 +423,143 @@ export default function Login() {
                   color="#061014"
                 />
               ) : (
-                <Text
-                  style={styles.loginButtonText}
-                >
-                  Sign In
-                </Text>
+                <>
+                  <Text
+                    style={styles.loginButtonText}
+                  >
+                    Sign In
+                  </Text>
+
+                  <Ionicons
+                    name="arrow-forward"
+                    size={19}
+                    color="#061014"
+                  />
+                </>
               )}
             </TouchableOpacity>
+          </View>
 
-            {/* ==========================
-                SIGN UP
-            ========================== */}
-            <View
+          {/* ==========================
+              DIVIDER
+          ========================== */}
+
+          <View
+            style={[
+              styles.dividerContainer,
+              isPhone &&
+                styles.mobileDividerContainer,
+            ]}
+          >
+            <View style={styles.divider} />
+
+            <Text style={styles.dividerText}>
+              OR
+            </Text>
+
+            <View style={styles.divider} />
+          </View>
+
+          {/* ==========================
+              GOOGLE
+          ========================== */}
+
+          <TouchableOpacity
+            style={[
+              styles.googleButton,
+              isPhone &&
+                styles.mobileGoogleButton,
+            ]}
+            activeOpacity={0.85}
+            onPress={handleGoogleSignIn}
+            disabled={!request || loading}
+          >
+            <View style={styles.googleIconBox}>
+              <Text style={styles.googleIcon}>
+                G
+              </Text>
+            </View>
+
+            <Text
               style={[
-                styles.signupRow,
+                styles.googleText,
                 isSmallPhone &&
-                  styles.smallPhoneSignupRow,
+                  styles.smallPhoneGoogleText,
               ]}
+            >
+              Continue with Google
+            </Text>
+          </TouchableOpacity>
+
+          {/* ==========================
+              SIGN UP
+          ========================== */}
+
+          <View
+            style={[
+              styles.signupRow,
+              isSmallPhone &&
+                styles.smallPhoneSignupRow,
+            ]}
+          >
+            <Text
+              style={[
+                styles.signupText,
+                isSmallPhone &&
+                  styles.smallPhoneSignupText,
+              ]}
+            >
+              Don't have an account?
+            </Text>
+
+            <TouchableOpacity
+              onPress={() =>
+                router.push("/signup")
+              }
+              hitSlop={{
+                top: 8,
+                bottom: 8,
+                left: 8,
+                right: 8,
+              }}
             >
               <Text
                 style={[
-                  styles.signupText,
+                  styles.signupLink,
                   isSmallPhone &&
-                    styles.smallPhoneSignupText,
+                    styles.smallPhoneSignupLink,
                 ]}
               >
-                Don't have an account?
+                Create Account
               </Text>
+            </TouchableOpacity>
+          </View>
 
-              <TouchableOpacity
-                onPress={() =>
-                  router.push("/signup")
-                }
-                hitSlop={{
-                  top: 8,
-                  bottom: 8,
-                  left: 8,
-                  right: 8,
-                }}
-              >
-                <Text
-                  style={[
-                    styles.signupLink,
-                    isSmallPhone &&
-                      styles.smallPhoneSignupLink,
-                  ]}
-                >
-                  Create Account
-                </Text>
-              </TouchableOpacity>
-            </View>
+          {/* ==========================
+              FOOTER
+          ========================== */}
 
-            {/* ==========================
-                FOOTER
-            ========================== */}
-            <View
-              style={[
-                styles.footer,
-                isPhone && styles.mobileFooter,
-              ]}
-            >
-              <Text
-                style={styles.footerBrand}
-              >
-                ZURI
-              </Text>
+          <View
+            style={[
+              styles.footer,
+              isPhone &&
+                styles.mobileFooter,
+            ]}
+          >
+            <Text style={styles.footerBrand}>
+              ZURI
+            </Text>
 
-              <Text
-                style={styles.footerDot}
-              >
-                •
-              </Text>
+            <Text style={styles.footerDot}>
+              •
+            </Text>
 
-              <Text
-                style={styles.footerText}
-              >
-                Powered by KINX
-              </Text>
-            </View>
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+            <Text style={styles.footerText}>
+              Powered by KYNX
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -561,7 +570,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#071114",
   },
 
-  keyboardContainer: {
+  scroll: {
     flex: 1,
   },
 
@@ -569,170 +578,220 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 28,
-    paddingVertical: 40,
+    paddingVertical: 45,
   },
 
   mobileContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 28,
   },
 
   smallPhoneContent: {
-    paddingHorizontal: 8,
-    paddingVertical: 14,
-  },
-
-  authCard: {
-    width: "100%",
-    maxWidth: 520,
-    alignSelf: "center",
-
-    backgroundColor: "rgba(10,18,22,0.82)",
-
-    borderRadius: 30,
-
-    borderWidth: 1,
-    borderColor: "rgba(16,224,212,0.10)",
-
-    paddingHorizontal: 28,
-    paddingVertical: 34,
-
-    shadowColor: "#10E0D4",
-
-    shadowOffset: {
-      width: 0,
-      height: 18,
-    },
-
-    shadowOpacity: 0.15,
-    shadowRadius: 30,
-
-    elevation: 10,
-  },
-
-  mobileAuthCard: {
-    maxWidth: 520,
-    borderRadius: 22,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 22,
   },
 
-  smallPhoneAuthCard: {
-    borderRadius: 20,
-    paddingHorizontal: 13,
-    paddingVertical: 18,
+  authContainer: {
+    width: "100%",
+    maxWidth: 470,
+    alignSelf: "center",
   },
 
-  logoContainer: {
+  mobileAuthContainer: {
+    maxWidth: 470,
+  },
+
+  /* ==========================
+     LOGO
+  ========================== */
+
+  logoSection: {
     alignItems: "center",
-    marginBottom: 36,
+    marginBottom: 34,
   },
 
-  mobileLogoContainer: {
-    marginBottom: 22,
+  mobileLogoSection: {
+    marginBottom: 28,
   },
 
   logo: {
-    width: 180,
-    height: 180,
-    marginBottom: 18,
+    width: 150,
+    height: 150,
+    marginBottom: 12,
   },
 
   mobileLogo: {
-    width: 105,
-    height: 105,
-    marginBottom: 9,
+    width: 92,
+    height: 92,
+    marginBottom: 8,
   },
 
   smallPhoneLogo: {
-    width: 88,
-    height: 88,
+    width: 78,
+    height: 78,
   },
 
   title: {
     color: "#FFFFFF",
-    fontSize: 42,
+    fontSize: 38,
     fontWeight: "900",
     textAlign: "center",
+    letterSpacing: -0.8,
   },
 
   mobileTitle: {
-    fontSize: 29,
+    fontSize: 30,
+    letterSpacing: -0.5,
   },
 
   smallPhoneTitle: {
-    fontSize: 26,
+    fontSize: 27,
   },
 
   subtitle: {
     color: "#AFC4C8",
-    fontSize: 16,
-    lineHeight: 26,
+    fontSize: 15,
     textAlign: "center",
-    marginTop: 12,
-    marginBottom: 34,
-    maxWidth: 420,
+    marginTop: 8,
   },
 
   mobileSubtitle: {
     fontSize: 13.5,
-    lineHeight: 20,
-    marginTop: 7,
-    marginBottom: 18,
-    paddingHorizontal: 6,
+    marginTop: 6,
   },
 
-  googleButton: {
-    height: 60,
-    borderRadius: 18,
+  /* ==========================
+     FORM
+  ========================== */
 
-    backgroundColor: "#FFFFFF",
+  form: {
+    width: "100%",
+  },
 
+  label: {
+    color: "#10E0D4",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+
+  passwordLabel: {
+    marginTop: 18,
+  },
+
+  inputWrapper: {
+    width: "100%",
+    height: 58,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "rgba(16,224,212,0.16)",
+    backgroundColor: "rgba(255,255,255,0.045)",
     flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: 15,
+  },
+
+  mobileInputWrapper: {
+    height: 55,
+    borderRadius: 15,
+  },
+
+  inputWrapperFocused: {
+    borderColor: "#10E0D4",
+    backgroundColor: "rgba(16,224,212,0.055)",
+    shadowColor: "#10E0D4",
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    elevation: 5,
+  },
+
+  inputIcon: {
+    marginRight: 11,
+  },
+
+  textInput: {
+    flex: 1,
+    minWidth: 0,
+    height: "100%",
+    color: "#FFFFFF",
+    fontSize: 15,
+    paddingVertical: 0,
+  },
+
+  eyeButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
     justifyContent: "center",
+    marginLeft: 4,
+  },
 
-    marginBottom: 26,
+  forgotButton: {
+    alignSelf: "flex-end",
+    paddingVertical: 9,
+    paddingLeft: 8,
+    marginBottom: 14,
+  },
 
-    shadowColor: "#FFFFFF",
-    shadowOpacity: 0.08,
+  forgotText: {
+    color: "#D4A72C",
+    fontSize: 12.5,
+    fontWeight: "700",
+  },
+
+  /* ==========================
+     SIGN IN
+  ========================== */
+
+  loginButton: {
+    width: "100%",
+    height: 58,
+    borderRadius: 17,
+    backgroundColor: "#D4A72C",
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 9,
+    shadowColor: "#D4A72C",
+    shadowOpacity: 0.28,
     shadowRadius: 18,
-
     shadowOffset: {
       width: 0,
       height: 8,
     },
-
-    elevation: 6,
+    elevation: 8,
   },
 
-  mobileGoogleButton: {
-    height: 52,
+  mobileLoginButton: {
+    height: 55,
     borderRadius: 15,
-    marginBottom: 18,
   },
 
-  googleIcon: {
-    fontSize: 22,
+  loginButtonText: {
+    color: "#061014",
+    fontSize: 16,
     fontWeight: "900",
-    color: "#4285F4",
-    marginRight: 10,
+    letterSpacing: 0.4,
   },
 
-  googleText: {
-    color: "#202124",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-
-  smallPhoneGoogleText: {
-    fontSize: 13,
-  },
+  /* ==========================
+     DIVIDER
+  ========================== */
 
   dividerContainer: {
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
+    marginVertical: 25,
+  },
+
+  mobileDividerContainer: {
+    marginVertical: 21,
   },
 
   divider: {
@@ -743,184 +802,76 @@ const styles = StyleSheet.create({
 
   dividerText: {
     color: "#738A8E",
-    marginHorizontal: 14,
+    marginHorizontal: 13,
     fontWeight: "700",
-    fontSize: 12,
+    fontSize: 10,
     letterSpacing: 1.5,
   },
 
-  label: {
-    color: "#10E0D4",
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 2,
-    marginBottom: 8,
-    marginTop: 7,
-  },
+  /* ==========================
+     GOOGLE
+  ========================== */
 
-  input: {
-    height: 62,
-    borderRadius: 20,
-
-    backgroundColor: "rgba(255,255,255,0.04)",
-
-    borderWidth: 1.2,
-    borderColor: "rgba(16,224,212,0.15)",
-
-    paddingHorizontal: 20,
-
-    color: "#FFFFFF",
-
-    fontSize: 16,
-
-    marginBottom: 18,
-  },
-
-  mobileInput: {
-    height: 54,
-    borderRadius: 15,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    marginBottom: 14,
-  },
-
-  passwordContainer: {
-    height: 62,
-
-    borderRadius: 20,
-
-    backgroundColor: "rgba(255,255,255,0.04)",
-
-    borderWidth: 1.2,
-
-    borderColor: "rgba(16,224,212,0.15)",
-
-    paddingHorizontal: 18,
-
+  googleButton: {
+    width: "100%",
+    height: 56,
+    borderRadius: 17,
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
-
-    alignItems: "center",
-  },
-
-  mobilePasswordContainer: {
-    height: 54,
-    borderRadius: 15,
-    paddingHorizontal: 14,
-  },
-
-  passwordInput: {
-    flex: 1,
-    minWidth: 0,
-
-    color: "#FFFFFF",
-
-    fontSize: 16,
-
-    paddingVertical: 0,
-
-    includeFontPadding: false,
-  },
-
-  mobilePasswordInput: {
-    fontSize: 15,
-  },
-
-  eyeButton: {
-    width: 42,
-    height: 42,
-
     alignItems: "center",
     justifyContent: "center",
-
-    marginLeft: 4,
+    elevation: 5,
   },
 
-  inputFocused: {
-    borderColor: "#10E0D4",
-
-    shadowColor: "#10E0D4",
-
-    shadowOpacity: 0.35,
-
-    shadowRadius: 18,
-
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-
-    elevation: 8,
+  mobileGoogleButton: {
+    height: 53,
+    borderRadius: 15,
   },
 
-  forgotButton: {
-    alignSelf: "flex-end",
-
-    marginTop: 11,
-    marginBottom: 20,
-
-    paddingVertical: 5,
-    paddingHorizontal: 2,
+  googleIconBox: {
+    width: 27,
+    height: 27,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 9,
   },
 
-  forgotText: {
-    color: "#D4A72C",
-    fontSize: 13,
+  googleIcon: {
+    color: "#4285F4",
+    fontSize: 21,
+    fontWeight: "900",
+  },
+
+  googleText: {
+    color: "#202124",
+    fontSize: 14.5,
     fontWeight: "700",
   },
 
-  loginButton: {
-    height: 62,
-
-    borderRadius: 20,
-
-    backgroundColor: "#D4A72C",
-
-    justifyContent: "center",
-    alignItems: "center",
-
-    shadowColor: "#D4A72C",
-
-    shadowOpacity: 0.35,
-
-    shadowRadius: 22,
-
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-
-    elevation: 10,
+  smallPhoneGoogleText: {
+    fontSize: 13,
   },
 
-  mobileLoginButton: {
-    height: 54,
-    borderRadius: 15,
-  },
-
-  loginButtonText: {
-    color: "#061014",
-    fontSize: 17,
-    fontWeight: "900",
-    letterSpacing: 0.5,
-  },
+  /* ==========================
+     SIGN UP
+  ========================== */
 
   signupRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-
     marginTop: 25,
   },
 
   smallPhoneSignupRow: {
     flexWrap: "wrap",
     rowGap: 4,
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
   },
 
   signupText: {
     color: "#819396",
-    fontSize: 14,
+    fontSize: 13,
   },
 
   smallPhoneSignupText: {
@@ -929,7 +880,7 @@ const styles = StyleSheet.create({
 
   signupLink: {
     color: "#10E0D4",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
     marginLeft: 6,
   },
@@ -938,64 +889,61 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
+  /* ==========================
+     FOOTER
+  ========================== */
+
   footer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-
-    marginTop: 42,
+    marginTop: 32,
   },
 
   mobileFooter: {
-    marginTop: 26,
+    marginTop: 25,
   },
 
   footerBrand: {
     color: "#D4A72C",
     fontWeight: "900",
-    fontSize: 12,
+    fontSize: 11,
     letterSpacing: 2,
   },
 
   footerDot: {
     color: "#5D7377",
-    marginHorizontal: 10,
-    fontSize: 12,
+    marginHorizontal: 9,
+    fontSize: 11,
   },
 
   footerText: {
     color: "#738A8E",
-    fontSize: 12,
+    fontSize: 11,
   },
+
+  /* ==========================
+     BACKGROUND
+  ========================== */
 
   topGlow: {
     position: "absolute",
-
     top: -220,
-
     alignSelf: "center",
-
     width: 520,
     height: 520,
-
     borderRadius: 260,
-
     backgroundColor:
       "rgba(16,224,212,0.06)",
   },
 
   bottomGlow: {
     position: "absolute",
-
     bottom: -180,
-
     right: -100,
-
     width: 380,
     height: 380,
-
     borderRadius: 190,
-
     backgroundColor:
       "rgba(217,164,65,0.05)",
   },
