@@ -6,7 +6,15 @@ export const uploadGeneratedImage = async (
 
   const formData = new FormData();
 
-  formData.append("file", imageUrl);
+  const imageResponse = await fetch(imageUrl);
+
+  if (!imageResponse.ok) {
+    throw new Error("Failed to download generated image.");
+  }
+
+  const blob = await imageResponse.blob();
+
+  formData.append("file", blob, "zuri-generated-image.png");
   formData.append("upload_preset", uploadPreset);
   formData.append("folder", "athena/generated-images");
 
