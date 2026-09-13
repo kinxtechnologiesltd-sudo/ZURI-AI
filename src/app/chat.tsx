@@ -3,7 +3,9 @@ import {
   RecordingPresets,
   useAudioRecorder,
 } from "expo-audio";
-import { useEffect, useRef, useState } from "react";
+import ZuriLogo from "../asset/images/zuri-icon.png (2).png";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -14,11 +16,11 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+    Image,
   useWindowDimensions,
 } from "react-native";
 
 import MessageBubble from "../components/chat/MessageBubble";
-import EmptyChat from "../components/EmptyChat";
 import RightPanel from "../components/layout/RightPanel";
 import Sidebar from "../components/layout/Sidebar";
 import TopHeader from "../components/layout/TopHeader";
@@ -159,15 +161,28 @@ export default function Chat() {
 
   const [showMobileHistory, setShowMobileHistory] =
     useState(false);
+const scrollViewRef =
+  useRef<ScrollView>(null);
 
-  const scrollViewRef =
-    useRef<ScrollView>(null);
+const inputRef = useRef<TextInput>(null);
 
   const { width } = useWindowDimensions();
 
   const isDesktop = width >= 1024;
   const isMobile = width < 600;
   const isSmallPhone = width < 380;
+
+  useFocusEffect(
+  useCallback(() => {
+    if (!isMobile) return;
+
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [isMobile])
+);
 
   useEffect(() => {
     console.log(
@@ -1259,13 +1274,15 @@ export default function Chat() {
               styles.smallPhoneChatContent,
           ]}
         >
-          {messages.length === 0 && (
-            <EmptyChat
-              onSelectPrompt={(
-                prompt: string
-              ) => setInput(prompt)}
-            />
-          )}
+{messages.length === 0 && (
+  <View style={styles.emptyZuri}>
+    <Image
+      source={ZuriLogo}
+      style={styles.emptyZuriLogo}
+      resizeMode="contain"
+    />
+  </View>
+)}
 
           {messages.map(
             (message, index) => (
@@ -1372,8 +1389,9 @@ export default function Chat() {
             ]}
           >
             {/* TEXT INPUT */}
-            <TextInput
-              value={input}
+          <TextInput
+  ref={inputRef}
+  value={input}
               onChangeText={setInput}
               placeholder="Ask Zuri anything..."
               placeholderTextColor="#64748B"
@@ -1964,12 +1982,12 @@ const styles = StyleSheet.create({
     borderTopColor: "#172B30",
   },
 
-  mobileInputContainer: {
-    paddingHorizontal: 7,
-    paddingTop: 7,
-    paddingBottom: 8,
-    minHeight: 58,
-  },
+mobileInputContainer: {
+  paddingHorizontal: 7,
+  paddingTop: 5,
+  paddingBottom: 14,
+  minHeight: 58,
+},
 
   smallPhoneInputContainer: {
     paddingHorizontal: 5,
@@ -2225,7 +2243,17 @@ smallPhoneActionButton: {
     borderBottomColor: "#182A30",
     backgroundColor: "#081216",
   },
+emptyZuri: {
+  flex: 1,
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 300,
+},
 
+emptyZuriLogo: {
+  width: 800,
+  height: 750,
+},
   mobileHistoryTitle: {
     color: "#F5F3EC",
     fontSize: 18,

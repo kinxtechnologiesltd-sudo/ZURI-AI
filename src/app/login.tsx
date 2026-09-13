@@ -365,11 +365,10 @@ export default function Login() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-
+container: {
+  flex: 1,
+  backgroundColor: "#081216",
+},
   content: {
     flexGrow: 1,
     justifyContent: "center",

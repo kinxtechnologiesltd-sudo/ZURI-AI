@@ -1,13 +1,7 @@
 import {
-  createElement,
-  type AnchorHTMLAttributes,
-  type AudioHTMLAttributes,
-  type VideoHTMLAttributes,
-} from "react";
-
-import {
   Image,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,20 +9,14 @@ import {
   View,
 } from "react-native";
 
+import { VideoView, useVideoPlayer } from "expo-video";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+
 type ResearchImage = {
   url: string;
   title?: string | null;
   sourceUrl?: string | null;
 };
-
-type WebVideoProps =
-  VideoHTMLAttributes<HTMLVideoElement>;
-
-type WebAudioProps =
-  AudioHTMLAttributes<HTMLAudioElement>;
-
-type WebAudioDownloadProps =
-  AnchorHTMLAttributes<HTMLAnchorElement>;
 
 type MessageBubbleProps = {
   sender: "user" | "ai";
@@ -214,7 +202,6 @@ function renderMarkdown(
       continue;
     }
 
-    // Heading
     const headingMatch = trimmed.match(
       /^(#{1,4})\s+(.+)$/
     );
@@ -244,7 +231,6 @@ function renderMarkdown(
       continue;
     }
 
-    // Bullet list
     const bulletMatch = trimmed.match(
       /^[-*•]\s+(.+)$/
     );
@@ -279,7 +265,6 @@ function renderMarkdown(
       continue;
     }
 
-    // Numbered list
     const numberedMatch = trimmed.match(
       /^(\d+)[.)]\s+(.+)$/
     );
@@ -314,7 +299,6 @@ function renderMarkdown(
       continue;
     }
 
-    // Blockquote
     const quoteMatch = trimmed.match(
       /^>\s*(.+)$/
     );
@@ -345,7 +329,6 @@ function renderMarkdown(
       continue;
     }
 
-    // Horizontal rule
     if (
       /^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)
     ) {
@@ -360,7 +343,6 @@ function renderMarkdown(
       continue;
     }
 
-    // Normal paragraph
     elements.push(
       <Text
         key={`paragraph-${index}`}
@@ -402,6 +384,170 @@ function renderMarkdown(
 
   return elements;
 }
+
+/* =========================================================
+   NATIVE VIDEO
+   ========================================================= */
+
+function GeneratedVideo({
+  videoUrl,
+}: {
+  videoUrl: string;
+}) {
+  const player = useVideoPlayer(videoUrl, (player) => {
+    player.loop = false;
+  });
+
+  return (
+    <View style={styles.videoContainer}>
+      <VideoView
+        player={player}
+        style={styles.nativeVideo}
+        contentFit="contain"
+        nativeControls
+      />
+
+      <View style={styles.videoLabel}>
+        <View style={styles.videoLabelDot} />
+
+        <Text style={styles.videoLabelText}>
+          CREATED WITH ZURI
+        </Text>
+      </View>
+
+      <TouchableOpacity
+        style={styles.nativeDownloadButton}
+        activeOpacity={0.8}
+        onPress={() => {
+          void Linking.openURL(videoUrl);
+        }}
+      >
+        <Text style={styles.nativeDownloadText}>
+          ↗ Open / Download Video
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+/* =========================================================
+   NATIVE AUDIO
+   ========================================================= */
+
+function GeneratedAudio({
+  audioUrl,
+}: {
+  audioUrl: string;
+}) {
+  const player = useAudioPlayer(audioUrl);
+  const status = useAudioPlayerStatus(player);
+
+  const isPlaying = status.playing;
+
+  return (
+    <View style={styles.audioContainer}>
+      <View style={styles.audioHeader}>
+        <View style={styles.audioIcon}>
+          <Text style={styles.audioIconText}>
+            ♪
+          </Text>
+        </View>
+
+        <View style={styles.audioTitleContainer}>
+          <Text style={styles.audioTitle}>
+            ZURI MUSIC
+          </Text>
+
+          <Text style={styles.audioSubtitle}>
+            AI-generated audio
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.audioPlayerRow}>
+        <TouchableOpacity
+          style={styles.audioPlayButton}
+          activeOpacity={0.8}
+          onPress={() => {
+            if (isPlaying) {
+              player.pause();
+            } else {
+              player.play();
+            }
+          }}
+        >
+          <Text style={styles.audioPlayText}>
+            {isPlaying ? "Ⅱ" : "▶"}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.audioTrack}>
+          <View
+            style={[
+              styles.audioTrackProgress,
+              {
+                width:
+                  status.duration > 0
+                    ? `${Math.min(
+                        100,
+                        (status.currentTime /
+                          status.duration) *
+                          100
+                      )}%`
+                    : "0%",
+              },
+            ]}
+          />
+        </View>
+
+        <Text style={styles.audioTime}>
+          {formatAudioTime(
+            status.currentTime
+          )}
+        </Text>
+      </View>
+
+      <TouchableOpacity
+        style={styles.nativeDownloadButton}
+        activeOpacity={0.8}
+        onPress={() => {
+          void Linking.openURL(audioUrl);
+        }}
+      >
+        <Text style={styles.nativeDownloadText}>
+          ↗ Open / Download Music
+        </Text>
+      </TouchableOpacity>
+
+      <View style={styles.audioFooter}>
+        <View style={styles.audioFooterDot} />
+
+        <Text style={styles.audioFooterText}>
+          CREATED WITH ZURI • SUNO
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function formatAudioTime(seconds: number) {
+  if (!Number.isFinite(seconds)) {
+    return "0:00";
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(
+    seconds % 60
+  );
+
+  return `${minutes}:${String(
+    remainingSeconds
+  ).padStart(2, "0")}`;
+}
+
+/* =========================================================
+   MESSAGE BUBBLE
+   ========================================================= */
 
 export default function MessageBubble({
   sender,
@@ -577,82 +723,80 @@ export default function MessageBubble({
                 }
               >
                 {researchImages.map(
-                  (item, index) => {
-                    return (
-                      <View
-                        key={`${item.url}-${index}`}
-                        style={styles.researchCard}
+                  (item, index) => (
+                    <View
+                      key={`${item.url}-${index}`}
+                      style={styles.researchCard}
+                    >
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => {
+                          if (item.url) {
+                            void Linking.openURL(
+                              item.url
+                            );
+                          }
+                        }}
                       >
-                        <TouchableOpacity
-                          activeOpacity={0.85}
-                          onPress={() => {
-                            if (item.url) {
-                              void Linking.openURL(
-                                item.url
-                              );
-                            }
+                        <Image
+                          source={{
+                            uri: item.url,
                           }}
+                          style={
+                            styles.researchImage
+                          }
+                          resizeMode="cover"
+                        />
+
+                        <View
+                          style={
+                            styles.imageOverlay
+                          }
                         >
-                          <Image
-                            source={{
-                              uri: item.url,
-                            }}
-                            style={
-                              styles.researchImage
-                            }
-                            resizeMode="cover"
-                          />
-
-                          <View
-                            style={
-                              styles.imageOverlay
-                            }
-                          >
-                            <Text
-                              style={
-                                styles.imageOpenText
-                              }
-                            >
-                              View ↗
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-
-                        {!!item.title && (
                           <Text
                             style={
-                              styles.researchTitle
+                              styles.imageOpenText
                             }
-                            numberOfLines={2}
                           >
-                            {item.title}
+                            View ↗
                           </Text>
-                        )}
+                        </View>
+                      </TouchableOpacity>
 
-                        {!!item.sourceUrl && (
-                          <TouchableOpacity
+                      {!!item.title && (
+                        <Text
+                          style={
+                            styles.researchTitle
+                          }
+                          numberOfLines={2}
+                        >
+                          {item.title}
+                        </Text>
+                      )}
+
+                      {!!item.sourceUrl && (
+                        <TouchableOpacity
+                          style={
+                            styles.sourceButton
+                          }
+                          activeOpacity={0.75}
+                          onPress={() => {
+                            void Linking.openURL(
+                              item.sourceUrl!
+                            );
+                          }}
+                        >
+                          <Text
                             style={
-                              styles.sourceButton
+                              styles.sourceButtonText
                             }
-                            activeOpacity={0.75}
-                            onPress={() => {
-                              void Linking.openURL(
-                                item.sourceUrl!
-                              );
-                            }}
                           >
-                            <Text
-                              style={
-                                styles.sourceButtonText
-                              }
-                            >
-                              View source ↗
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    );
-                  }
+                            View source ↗
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )
                 )}
               </ScrollView>
             </View>
@@ -680,243 +824,34 @@ export default function MessageBubble({
               </Text>
             </View>
 
-            {createElement(
-              "a",
-              {
-                href: safeImageUrl.replace(
-                  "/image/upload/",
-                  "/image/upload/fl_attachment:zuri-generated-image/"
-                ),
-                download:
-                  "zuri-generated-image",
-                target: "_blank",
-                rel:
-                  "noopener noreferrer",
-                style: {
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: "100%",
-                  padding: "11px 14px",
-                  borderRadius: 12,
-                  backgroundColor:
-                    "#12383D",
-                  border:
-                    "1px solid #31565B",
-                  color: "#E8F2F0",
-                  textDecoration: "none",
-                  fontSize: 13,
-                  fontWeight: "700",
-                  boxSizing: "border-box",
-                  cursor: "pointer",
-                },
-              } satisfies AnchorHTMLAttributes<HTMLAnchorElement>,
-              "⬇ Download Image"
-            )}
+            <TouchableOpacity
+              style={styles.nativeDownloadButton}
+              activeOpacity={0.8}
+              onPress={() => {
+                void Linking.openURL(
+                  safeImageUrl
+                );
+              }}
+            >
+              <Text
+                style={styles.nativeDownloadText}
+              >
+                ↗ Open / Save Image
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
 
         {!!safeVideoUrl && (
-          <View style={styles.videoContainer}>
-            {createElement("video", {
-              src: safeVideoUrl,
-              controls: true,
-              playsInline: true,
-              preload: "metadata",
-
-              style: {
-                width: "100%",
-                height: 360,
-                display: "block",
-                objectFit: "contain",
-                backgroundColor: "#050A0D",
-                borderRadius: 12,
-              },
-
-              onLoadedMetadata: () => {
-                console.log(
-                  "✅ ZURI VIDEO METADATA LOADED:",
-                  safeVideoUrl
-                );
-              },
-
-              onCanPlay: () => {
-                console.log(
-                  "▶️ ZURI VIDEO CAN PLAY:",
-                  safeVideoUrl
-                );
-              },
-
-              onError: () => {
-                console.error(
-                  "❌ ZURI VIDEO PLAYBACK ERROR:",
-                  {
-                    videoUrl:
-                      safeVideoUrl,
-                    message:
-                      "The browser could not load or play the generated video.",
-                  }
-                );
-              },
-            } satisfies WebVideoProps)}
-
-            <View style={styles.videoLabel}>
-              <View
-                style={styles.videoLabelDot}
-              />
-
-              <Text
-                style={styles.videoLabelText}
-              >
-                CREATED WITH ZURI
-              </Text>
-            </View>
-
-            {createElement(
-              "a",
-              {
-                href: safeVideoUrl,
-                target: "_blank",
-                rel:
-                  "noopener noreferrer",
-                download: true,
-
-                style: {
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: "100%",
-                  marginTop: 4,
-                  marginBottom: 10,
-                  padding: "11px 14px",
-                  borderRadius: 12,
-                  backgroundColor:
-                    "#12383D",
-                  border:
-                    "1px solid #31565B",
-                  color: "#E8F2F0",
-                  textDecoration: "none",
-                  fontSize: 13,
-                  fontWeight: "700",
-                  boxSizing: "border-box",
-                  cursor: "pointer",
-                },
-              } satisfies AnchorHTMLAttributes<HTMLAnchorElement>,
-              "⬇ Download Video"
-            )}
-          </View>
+          <GeneratedVideo
+            videoUrl={safeVideoUrl}
+          />
         )}
 
         {!!safeAudioUrl && (
-          <View style={styles.audioContainer}>
-            <View style={styles.audioHeader}>
-              <View style={styles.audioIcon}>
-                <Text
-                  style={styles.audioIconText}
-                >
-                  ♪
-                </Text>
-              </View>
-
-              <View
-                style={
-                  styles.audioTitleContainer
-                }
-              >
-                <Text
-                  style={styles.audioTitle}
-                >
-                  ZURI MUSIC
-                </Text>
-
-                <Text
-                  style={styles.audioSubtitle}
-                >
-                  AI-generated audio
-                </Text>
-              </View>
-            </View>
-
-            {createElement(
-              "audio",
-              {
-                src: safeAudioUrl,
-                controls: true,
-                preload: "metadata",
-
-                style: {
-                  width: "100%",
-                  display: "block",
-                },
-
-                onError: () => {
-                  console.error(
-                    "❌ ZURI AUDIO PLAYBACK ERROR:",
-                    {
-                      audioUrl:
-                        safeAudioUrl,
-                    }
-                  );
-                },
-
-                onCanPlay: () => {
-                  console.log(
-                    "▶️ ZURI AUDIO CAN PLAY:",
-                    safeAudioUrl
-                  );
-                },
-              } satisfies WebAudioProps
-            )}
-
-            {createElement(
-              "a",
-              {
-                href: safeAudioUrl,
-                download:
-                  "zuri-music.mp3",
-                target: "_blank",
-                rel:
-                  "noopener noreferrer",
-
-                style: {
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: "100%",
-                  marginTop: 12,
-                  padding: "11px 14px",
-                  borderRadius: 12,
-                  backgroundColor:
-                    "#12383D",
-                  border:
-                    "1px solid #31565B",
-                  color: "#E8F2F0",
-                  textDecoration: "none",
-                  fontSize: 13,
-                  fontWeight: "700",
-                  boxSizing: "border-box",
-                  cursor: "pointer",
-                },
-              } satisfies WebAudioDownloadProps,
-              "⬇ Download Music"
-            )}
-
-            <View style={styles.audioFooter}>
-              <View
-                style={
-                  styles.audioFooterDot
-                }
-              />
-
-              <Text
-                style={
-                  styles.audioFooterText
-                }
-              >
-                CREATED WITH ZURI • SUNO
-              </Text>
-            </View>
-          </View>
+          <GeneratedAudio
+            audioUrl={safeAudioUrl}
+          />
         )}
       </View>
 
@@ -1416,6 +1351,24 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
   },
 
+  nativeDownloadButton: {
+    marginHorizontal: 10,
+    marginBottom: 10,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: "#12383D",
+    borderWidth: 1,
+    borderColor: "#31565B",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  nativeDownloadText: {
+    color: "#E8F2F0",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
   videoContainer: {
     width: 520,
     maxWidth: "100%",
@@ -1426,6 +1379,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#5C4C2E",
     overflow: "hidden",
+  },
+
+  nativeVideo: {
+    width: "100%",
+    height: 360,
+    backgroundColor: "#050A0D",
+    borderRadius: 12,
   },
 
   videoLabel: {
@@ -1500,6 +1460,49 @@ const styles = StyleSheet.create({
     color: "#71888B",
     fontSize: 11,
     marginTop: 3,
+  },
+
+  audioPlayerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+
+  audioPlayButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#18BEB3",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+
+  audioPlayText: {
+    color: "#061315",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+
+  audioTrack: {
+    flex: 1,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#1B3439",
+    overflow: "hidden",
+  },
+
+  audioTrackProgress: {
+    height: "100%",
+    backgroundColor: "#19D3C5",
+  },
+
+  audioTime: {
+    width: 42,
+    marginLeft: 8,
+    color: "#8EA1A3",
+    fontSize: 10,
+    textAlign: "right",
   },
 
   audioFooter: {
