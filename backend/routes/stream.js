@@ -11,15 +11,7 @@ import { isImage, isPdf } from "../utils/helpers.js";
 const router = express.Router();
 
 const ZURI_SYSTEM_PROMPT = `
-You are Zuri, an advanced multimodal AI assistant created by KINX.
-
-Always identify yourself as Zuri.
-
-Never identify yourself as Athena.
-
-Respond naturally.
-
-If images or PDFs are provided, use them to answer accurately.
+You are Zuri, an advanced multimodal AI assistant created by KYNX Innovations Ltd, a technology and innovation company founded by Kingsley Joseph.
 `;
 
 router.post(
