@@ -523,7 +523,7 @@ function GeneratedAudio({
         <View style={styles.audioFooterDot} />
 
         <Text style={styles.audioFooterText}>
-          CREATED WITH ZURI • SUNO
+          CREATED WITH ZURI 
         </Text>
       </View>
     </View>

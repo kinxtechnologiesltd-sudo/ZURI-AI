@@ -5,6 +5,7 @@ import {
 } from "expo-audio";
 import ZuriLogo from "../asset/images/zuri-icon.png (2).png";
 import { useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -1270,8 +1271,8 @@ const inputRef = useRef<TextInput>(null);
             styles.chatContent,
             isMobile &&
               styles.mobileChatContent,
-            isSmallPhone &&
-              styles.smallPhoneChatContent,
+          isSmallPhone &&
+  styles.smallPhoneSendButton,
           ]}
         >
 {messages.length === 0 && (
@@ -1445,15 +1446,11 @@ const inputRef = useRef<TextInput>(null);
                   right: 4,
                 }}
               >
-                <Text
-                  style={[
-                    styles.sendText,
-                    isMobile &&
-                      styles.mobileSendText,
-                  ]}
-                >
-                  ↑
-                </Text>
+              <Ionicons
+  name="arrow-up"
+  size={isSmallPhone ? 19 : isMobile ? 21 : 25}
+  color="#071014"
+/>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -2041,24 +2038,41 @@ smallPhoneActionButton: {
      SEND
   ========================== */
 
-  sendButton: {
-    width: 52,
-    height: 52,
-    marginLeft: 10,
-    backgroundColor: "#18BEB3",
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: "#4AD8CE",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  mobileSendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginLeft: 5,
-  },
+sendButton: {
+  width: 52,
+  height: 52,
+  minWidth: 44,
+  minHeight: 44,
+  flexShrink: 0,
+  marginLeft: 10,
+  backgroundColor: "#18BEB3",
+  borderRadius: 17,
+  borderWidth: 1,
+  borderColor: "#4AD8CE",
+  justifyContent: "center",
+  alignItems: "center",
+  overflow: "visible",
+},
+ mobileSendButton: {
+  width: 42,
+  height: 42,
+  minWidth: 42,
+  minHeight: 42,
+  borderRadius: 21,
+  marginLeft: 5,
+  flexShrink: 0,
+},
+smallPhoneSendButton: {
+  width: 40,
+  height: 40,
+  minWidth: 40,
+  minHeight: 40,
+  borderRadius: 20,
+  marginLeft: 4,
+  flexShrink: 0,
+  justifyContent: "center",
+  alignItems: "center",
+},
 
   sendText: {
     color: "#071014",

@@ -1,18 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Google from "expo-auth-session/providers/google";
+import { makeRedirectUri } from "expo-auth-session";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
+import { useEffect, useState } from "react";
+
 import {
   GoogleAuthProvider,
   signInWithCredential,
 } from "firebase/auth";
-import { useEffect, useState } from "react";
+
 import {
   ActivityIndicator,
   Alert,
   Image,
   Keyboard,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -23,7 +25,10 @@ import {
 } from "react-native";
 
 import ZuriLogo from "../asset/images/zuri-icon.png (2).png";
-import { loginUser } from "../firebase/auth";
+import {
+  loginUser,
+  saveGoogleUser,
+} from "../firebase/auth";
 import { auth } from "../firebase/firebaseConfig";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -33,6 +38,16 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // ==========================
+  // GOOGLE AUTH CONFIGURATION
+  // ==========================
+
+  const redirectUri = makeRedirectUri({
+    scheme: "zuri",
+    path: "oauthredirect",
+    native: "zuri:/oauthredirect",
+  });
 
   const [request, response, promptAsync] =
     Google.useAuthRequest({
@@ -44,7 +59,27 @@ export default function Login() {
 
       webClientId:
         "261432661731-gm32ncu7rvrtal301v33mgqmmdb1b0pg.apps.googleusercontent.com",
+
+      redirectUri,
+
+      scopes: ["openid", "profile", "email"],
+
+      selectAccount: true,
     });
+
+  // ==========================
+  // REDIRECT URI DEBUGGING
+  // ==========================
+
+  useEffect(() => {
+    console.log("=================================");
+    console.log("ZURI REDIRECT URI:", redirectUri);
+    console.log(
+      "REQUEST REDIRECT URI:",
+      request?.redirectUri
+    );
+    console.log("=================================");
+  }, [request, redirectUri]);
 
   // ==========================
   // GOOGLE RESPONSE
@@ -52,7 +87,24 @@ export default function Login() {
 
   useEffect(() => {
     const signInWithGoogle = async () => {
-      if (response?.type !== "success") return;
+      if (!response) return;
+
+      if (response.type === "error") {
+        console.log(
+          "GOOGLE OAUTH ERROR:",
+          response.params
+        );
+
+        Alert.alert(
+          "Google Login Failed",
+          response.params?.error_description ??
+            "Google authentication was unsuccessful."
+        );
+
+        return;
+      }
+
+      if (response.type !== "success") return;
 
       try {
         setLoading(true);
@@ -61,11 +113,9 @@ export default function Login() {
           response.authentication?.accessToken;
 
         if (!accessToken) {
-          Alert.alert(
-            "Google Login Failed",
-            "No access token received."
+          throw new Error(
+            "No Google access token received."
           );
-          return;
         }
 
         const credential =
@@ -74,19 +124,44 @@ export default function Login() {
             accessToken
           );
 
-        await signInWithCredential(
-          auth,
-          credential
+        const userCredential =
+          await signInWithCredential(
+            auth,
+            credential
+          );
+
+        await saveGoogleUser(
+          userCredential.user
+        );
+
+        console.log(
+          "GOOGLE USER SIGNED IN:",
+          userCredential.user.email
         );
 
         router.replace("/home");
       } catch (error: any) {
-        console.log(error);
+        console.log(
+          "GOOGLE SIGN-IN ERROR:",
+          error
+        );
+
+        let message =
+          "Unable to sign in with Google.";
+
+        if (
+          error?.code ===
+          "auth/network-request-failed"
+        ) {
+          message =
+            "Firebase could not connect. Check your internet connection, VPN, firewall, or network settings.";
+        } else if (error?.message) {
+          message = error.message;
+        }
 
         Alert.alert(
           "Google Login Failed",
-          error?.message ??
-            "Unable to sign in with Google."
+          message
         );
       } finally {
         setLoading(false);
@@ -101,30 +176,64 @@ export default function Login() {
   // ==========================
 
   const handleLogin = async () => {
-    if (!email.trim() || !password) {
+    Keyboard.dismiss();
+
+    const cleanEmail =
+      email.trim().toLowerCase();
+
+    if (!cleanEmail || !password) {
       Alert.alert(
         "Missing Information",
         "Please enter your email and password."
       );
+
       return;
     }
 
     try {
       setLoading(true);
 
-      Keyboard.dismiss();
-
       await loginUser(
-        email.trim(),
+        cleanEmail,
         password
       );
 
       router.replace("/home");
     } catch (error: any) {
+      let message =
+        "Unable to sign in. Please try again.";
+
+      switch (error?.code) {
+        case "auth/invalid-credential":
+        case "auth/wrong-password":
+        case "auth/user-not-found":
+          message =
+            "Incorrect email or password.";
+          break;
+
+        case "auth/invalid-email":
+          message =
+            "Please enter a valid email address.";
+          break;
+
+        case "auth/too-many-requests":
+          message =
+            "Too many attempts. Please try again later.";
+          break;
+
+        case "auth/network-request-failed":
+          message =
+            "Network error. Check your internet connection.";
+          break;
+
+        default:
+          message =
+            error?.message ?? message;
+      }
+
       Alert.alert(
         "Login Failed",
-        error?.message ??
-          "Unable to sign in."
+        message
       );
     } finally {
       setLoading(false);
@@ -136,13 +245,18 @@ export default function Login() {
   // ==========================
 
   const handleGoogleSignIn = async () => {
-    if (loading) return;
+    if (loading || !request) return;
 
     try {
       await promptAsync({
         showInRecents: true,
       });
     } catch (error: any) {
+      console.log(
+        "GOOGLE PROMPT ERROR:",
+        error
+      );
+
       Alert.alert(
         "Google Sign-In Failed",
         error?.message ??
@@ -151,11 +265,15 @@ export default function Login() {
     }
   };
 
+  // ==========================
+  // USER INTERFACE
+  // ==========================
+
   return (
     <View style={styles.container}>
       <StatusBar
-        barStyle="dark-content"
-        backgroundColor="#FFFFFF"
+        barStyle="light-content"
+        backgroundColor="#081216"
       />
 
       <ScrollView
@@ -164,7 +282,6 @@ export default function Login() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.formContainer}>
-
           {/* LOGO */}
 
           <View style={styles.logoContainer}>
@@ -193,14 +310,14 @@ export default function Login() {
             <Ionicons
               name="mail-outline"
               size={20}
-              color="#68777A"
+              color="#91A4A7"
               style={styles.inputIcon}
             />
 
             <TextInput
               style={styles.input}
               placeholder="Enter your email"
-              placeholderTextColor="#8A9799"
+              placeholderTextColor="#718589"
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -222,14 +339,14 @@ export default function Login() {
             <Ionicons
               name="lock-closed-outline"
               size={20}
-              color="#68777A"
+              color="#91A4A7"
               style={styles.inputIcon}
             />
 
             <TextInput
               style={styles.input}
               placeholder="Enter your password"
-              placeholderTextColor="#8A9799"
+              placeholderTextColor="#718589"
               value={password}
               onChangeText={setPassword}
               autoCapitalize="none"
@@ -257,7 +374,7 @@ export default function Login() {
                     : "eye-outline"
                 }
                 size={21}
-                color="#68777A"
+                color="#91A4A7"
               />
             </TouchableOpacity>
           </View>
@@ -279,15 +396,16 @@ export default function Login() {
           {/* SIGN IN */}
 
           <TouchableOpacity
-            style={styles.signInButton}
+            style={[
+              styles.signInButton,
+              loading && styles.disabledButton,
+            ]}
             onPress={handleLogin}
             disabled={loading}
             activeOpacity={0.85}
           >
             {loading ? (
-              <ActivityIndicator
-                color="#FFFFFF"
-              />
+              <ActivityIndicator color="#081216" />
             ) : (
               <Text style={styles.signInText}>
                 Sign In
@@ -335,6 +453,7 @@ export default function Login() {
               onPress={() =>
                 router.push("/signup")
               }
+              activeOpacity={0.7}
             >
               <Text style={styles.signupLink}>
                 Create Account
@@ -357,18 +476,22 @@ export default function Login() {
               Powered by KYNX
             </Text>
           </View>
-
         </View>
       </ScrollView>
     </View>
   );
 }
 
+// ==========================
+// STYLES
+// ==========================
+
 const styles = StyleSheet.create({
-container: {
-  flex: 1,
-  backgroundColor: "#081216",
-},
+  container: {
+    flex: 1,
+    backgroundColor: "#081216",
+  },
+
   content: {
     flexGrow: 1,
     justifyContent: "center",
@@ -382,10 +505,6 @@ container: {
     alignSelf: "center",
   },
 
-  // ==========================
-  // LOGO
-  // ==========================
-
   logoContainer: {
     alignItems: "center",
     marginBottom: 34,
@@ -398,7 +517,7 @@ container: {
   },
 
   title: {
-    color: "#071114",
+    color: "#FFFFFF",
     fontSize: 31,
     fontWeight: "800",
     textAlign: "center",
@@ -406,35 +525,27 @@ container: {
   },
 
   subtitle: {
-    color: "#68777A",
+    color: "#91A4A7",
     fontSize: 14,
     textAlign: "center",
     marginTop: 7,
   },
 
-  // ==========================
-  // LABELS
-  // ==========================
-
   label: {
-    color: "#071114",
+    color: "#E7F0F0",
     fontSize: 13,
     fontWeight: "700",
     marginBottom: 8,
     marginTop: 16,
   },
 
-  // ==========================
-  // INPUT
-  // ==========================
-
   inputContainer: {
     height: 56,
     width: "100%",
     borderWidth: 1,
-    borderColor: "#D7E0E1",
+    borderColor: "#263B40",
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#101F24",
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 14,
@@ -447,7 +558,7 @@ container: {
   input: {
     flex: 1,
     height: "100%",
-    color: "#071114",
+    color: "#FFFFFF",
     fontSize: 15,
     paddingVertical: 0,
   },
@@ -459,44 +570,36 @@ container: {
     justifyContent: "center",
   },
 
-  // ==========================
-  // FORGOT
-  // ==========================
-
   forgotButton: {
     alignSelf: "flex-end",
     paddingVertical: 10,
   },
 
   forgotText: {
-    color: "#087F78",
+    color: "#20C7B5",
     fontSize: 13,
     fontWeight: "600",
   },
-
-  // ==========================
-  // SIGN IN
-  // ==========================
 
   signInButton: {
     height: 56,
     width: "100%",
     borderRadius: 12,
-    backgroundColor: "#071114",
+    backgroundColor: "#20C7B5",
     alignItems: "center",
     justifyContent: "center",
     marginTop: 8,
   },
 
+  disabledButton: {
+    opacity: 0.65,
+  },
+
   signInText: {
-    color: "#FFFFFF",
+    color: "#081216",
     fontSize: 16,
     fontWeight: "800",
   },
-
-  // ==========================
-  // DIVIDER
-  // ==========================
 
   dividerRow: {
     flexDirection: "row",
@@ -507,28 +610,24 @@ container: {
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor: "#E1E7E8",
+    backgroundColor: "#263B40",
   },
 
   orText: {
-    color: "#8A9799",
+    color: "#718589",
     fontSize: 11,
     fontWeight: "700",
     marginHorizontal: 14,
     letterSpacing: 1,
   },
 
-  // ==========================
-  // GOOGLE
-  // ==========================
-
   googleButton: {
     height: 56,
     width: "100%",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#D7E0E1",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#263B40",
+    backgroundColor: "#101F24",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -542,14 +641,10 @@ container: {
   },
 
   googleText: {
-    color: "#202124",
+    color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "700",
   },
-
-  // ==========================
-  // SIGN UP
-  // ==========================
 
   signupRow: {
     flexDirection: "row",
@@ -559,20 +654,16 @@ container: {
   },
 
   signupText: {
-    color: "#68777A",
+    color: "#91A4A7",
     fontSize: 13,
   },
 
   signupLink: {
-    color: "#087F78",
+    color: "#20C7B5",
     fontSize: 13,
     fontWeight: "800",
     marginLeft: 5,
   },
-
-  // ==========================
-  // FOOTER
-  // ==========================
 
   footer: {
     flexDirection: "row",
@@ -589,13 +680,13 @@ container: {
   },
 
   footerDot: {
-    color: "#A7B3B5",
+    color: "#52676C",
     fontSize: 11,
     marginHorizontal: 8,
   },
 
   footerText: {
-    color: "#8A9799",
+    color: "#718589",
     fontSize: 11,
   },
 });

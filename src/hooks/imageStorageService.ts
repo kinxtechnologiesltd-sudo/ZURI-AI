@@ -6,17 +6,31 @@ export const uploadGeneratedImage = async (
 
   const formData = new FormData();
 
-  const imageResponse = await fetch(imageUrl);
+  if (imageUrl.startsWith("data:")) {
+    // Cloudinary accepts data URLs directly.
+    formData.append("file", imageUrl);
+  } else {
+    // For normal remote URLs, download the image first.
+    const imageResponse = await fetch(imageUrl);
 
-  if (!imageResponse.ok) {
-    throw new Error("Failed to download generated image.");
+    if (!imageResponse.ok) {
+      throw new Error("Failed to download generated image.");
+    }
+
+    const blob = await imageResponse.blob();
+
+    formData.append(
+      "file",
+      blob,
+      "zuri-generated-image.png"
+    );
   }
 
-  const blob = await imageResponse.blob();
-
-  formData.append("file", blob, "zuri-generated-image.png");
   formData.append("upload_preset", uploadPreset);
-  formData.append("folder", "athena/generated-images");
+  formData.append(
+    "folder",
+    "athena/generated-images"
+  );
 
   const response = await fetch(
     `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,

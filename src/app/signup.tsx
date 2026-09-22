@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -20,34 +21,27 @@ import ZuriLogo from "../asset/images/zuri-icon.png (2).png";
 import { registerUser } from "../firebase/auth";
 
 export default function Signup() {
-  const [fullName, setFullName] =
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] =
     useState("");
-
-  const [email, setEmail] =
-    useState("");
-
-  const [password, setPassword] =
-    useState("");
-
-  const [
-    confirmPassword,
-    setConfirmPassword,
-  ] = useState("");
-
-  const [showPassword, setShowPassword] =
-    useState(false);
-
-  const [loading, setLoading] =
-    useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // ==========================
   // CREATE ACCOUNT
   // ==========================
 
   const handleSignup = async () => {
+    Keyboard.dismiss();
+
+    const cleanedName = fullName.trim();
+    const cleanedEmail = email.trim().toLowerCase();
+
     if (
-      !fullName ||
-      !email ||
+      !cleanedName ||
+      !cleanedEmail ||
       !password ||
       !confirmPassword
     ) {
@@ -57,11 +51,14 @@ export default function Signup() {
       );
       return;
     }
-console.log("Signup button pressed");
-    if (password !== confirmPassword) {
+
+    const emailPattern =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailPattern.test(cleanedEmail)) {
       Alert.alert(
-        "Password Error",
-        "Passwords do not match."
+        "Invalid Email",
+        "Please enter a valid email address."
       );
       return;
     }
@@ -74,86 +71,126 @@ console.log("Signup button pressed");
       return;
     }
 
+    if (password !== confirmPassword) {
+      Alert.alert(
+        "Password Error",
+        "Passwords do not match."
+      );
+      return;
+    }
+
     try {
       setLoading(true);
 
-     await registerUser(
-  fullName,
-  email,
-  password
-);
-      Alert.alert(
-        "Success",
-        "Account created successfully!"
+      console.log("Signup button pressed");
+
+      await registerUser(
+        cleanedName,
+        cleanedEmail,
+        password
       );
 
-      router.replace("/home");
+      Alert.alert(
+        "Success",
+        "Your Zuri account has been created successfully!",
+        [
+          {
+            text: "Continue",
+            onPress: () => router.replace("/home"),
+          },
+        ]
+      );
     } catch (error: any) {
+      console.log("Signup Error:", error);
+
+      let errorMessage =
+        "Unable to create your account. Please try again.";
+
+      switch (error?.code) {
+        case "auth/email-already-in-use":
+          errorMessage =
+            "This email is already registered. Please sign in instead.";
+          break;
+
+        case "auth/invalid-email":
+          errorMessage =
+            "The email address is invalid.";
+          break;
+
+        case "auth/weak-password":
+          errorMessage =
+            "Your password is too weak. Use at least 6 characters.";
+          break;
+
+        case "auth/network-request-failed":
+          errorMessage =
+            "Network error. Please check your internet connection.";
+          break;
+
+        case "auth/operation-not-allowed":
+          errorMessage =
+            "Email and password registration is not enabled in Firebase.";
+          break;
+
+        default:
+          errorMessage =
+            error?.message || errorMessage;
+      }
+
       Alert.alert(
         "Signup Failed",
-        error.message ??
-          "Unable to create account."
+        errorMessage
       );
     } finally {
       setLoading(false);
     }
   };
 
+  // ==========================
+  // USER INTERFACE
+  // ==========================
+
   return (
     <>
       <StatusBar
         barStyle="light-content"
+        backgroundColor="#061014"
       />
 
-      <SafeAreaView
-        style={styles.container}
-      >
+      <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView
-          style={{ flex: 1 }}
+          style={styles.keyboardContainer}
           behavior={
             Platform.OS === "ios"
               ? "padding"
-              : undefined
+              : "height"
           }
         >
           <ScrollView
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={
-              styles.content
-            }
-            showsVerticalScrollIndicator={
-              false
-            }
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
           >
-            <View
-              style={styles.logoContainer}
-            >
+            <View style={styles.logoContainer}>
               <Image
                 source={ZuriLogo}
                 style={styles.logo}
                 resizeMode="contain"
               />
 
-              <Text
-                style={styles.title}
-              >
+              <Text style={styles.title}>
                 Create Account
               </Text>
 
-              <Text
-                style={
-                  styles.subtitle
-                }
-              >
-                Join Zuri and unlock
-                your personal AI
-                assistant.
+              <Text style={styles.subtitle}>
+                Join Zuri and unlock{"\n"}
+                your personal AI assistant.
               </Text>
             </View>
 
-            <Text
-              style={styles.label}
-            >
+            {/* FULL NAME */}
+
+            <Text style={styles.label}>
               FULL NAME
             </Text>
 
@@ -162,14 +199,16 @@ console.log("Signup button pressed");
               placeholder="Enter your full name"
               placeholderTextColor="#738A8E"
               value={fullName}
-              onChangeText={
-                setFullName
-              }
+              onChangeText={setFullName}
+              autoCapitalize="words"
+              autoCorrect={false}
+              returnKeyType="next"
+              editable={!loading}
             />
 
-            <Text
-              style={styles.label}
-            >
+            {/* EMAIL */}
+
+            <Text style={styles.label}>
               EMAIL
             </Text>
 
@@ -177,140 +216,127 @@ console.log("Signup button pressed");
               style={styles.input}
               placeholder="Enter your email"
               placeholderTextColor="#738A8E"
-              autoCapitalize="none"
-              keyboardType="email-address"
               value={email}
               onChangeText={setEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              keyboardType="email-address"
+              returnKeyType="next"
+              editable={!loading}
             />
 
-            <Text
-              style={styles.label}
-            >
+            {/* PASSWORD */}
+
+            <Text style={styles.label}>
               PASSWORD
             </Text>
 
-            <View
-              style={
-                styles.passwordContainer
-              }
-            >
+            <View style={styles.passwordContainer}>
               <TextInput
-                style={
-                  styles.passwordInput
-                }
+                style={styles.passwordInput}
                 placeholder="Create a password"
                 placeholderTextColor="#738A8E"
-                secureTextEntry={
-                  !showPassword
-                }
                 value={password}
-                onChangeText={
-                  setPassword
-                }
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
+                returnKeyType="next"
+                editable={!loading}
               />
 
               <TouchableOpacity
+                style={styles.eyeButton}
                 onPress={() =>
                   setShowPassword(
-                    !showPassword
+                    (previous) => !previous
                   )
                 }
+                disabled={loading}
+                activeOpacity={0.7}
               >
-                <Text
-                  style={styles.eye}
-                >
-                  {showPassword
-                    ? "🙈"
-                    : "👁"}
+                <Text style={styles.eye}>
+                  {showPassword ? "🙈" : "👁"}
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <Text
-              style={styles.label}
-            >
+            {/* CONFIRM PASSWORD */}
+
+            <Text style={styles.label}>
               CONFIRM PASSWORD
             </Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Confirm password"
-              placeholderTextColor="#738A8E"
-              secureTextEntry={
-                !showPassword
-              }
-              value={
-                confirmPassword
-              }
-              onChangeText={
-                setConfirmPassword
-              }
-            />            <TouchableOpacity
-              style={styles.signupButton}
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Confirm password"
+                placeholderTextColor="#738A8E"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
+                returnKeyType="done"
+                onSubmitEditing={handleSignup}
+                editable={!loading}
+              />
+            </View>
+
+            {/* CREATE ACCOUNT BUTTON */}
+
+            <TouchableOpacity
+              style={[
+                styles.signupButton,
+                loading && styles.disabledButton,
+              ]}
               onPress={handleSignup}
               disabled={loading}
               activeOpacity={0.85}
             >
               {loading ? (
-                <ActivityIndicator
-                  color="#061014"
-                />
+                <ActivityIndicator color="#061014" />
               ) : (
-                <Text
-                  style={
-                    styles.signupButtonText
-                  }
-                >
+                <Text style={styles.signupButtonText}>
                   Create Account
                 </Text>
               )}
             </TouchableOpacity>
 
-            <View
-              style={styles.loginRow}
-            >
-              <Text
-                style={styles.loginText}
-              >
+            {/* LOGIN LINK */}
+
+            <View style={styles.loginRow}>
+              <Text style={styles.loginText}>
                 Already have an account?
               </Text>
 
               <TouchableOpacity
-                onPress={() =>
-                  router.replace("/login")
-                }
+                onPress={() => router.replace("/login")}
+                disabled={loading}
+                activeOpacity={0.7}
               >
-                <Text
-                  style={styles.loginLink}
-                >
+                <Text style={styles.loginLink}>
                   Sign In
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <View
-              style={styles.footer}
-            >
-              <Text
-                style={
-                  styles.footerBrand
-                }
-              >
+            {/* FOOTER */}
+
+            <View style={styles.footer}>
+              <Text style={styles.footerBrand}>
                 ZURI
               </Text>
 
-              <Text
-                style={styles.footerDot}
-              >
+              <Text style={styles.footerDot}>
                 •
               </Text>
 
-              <Text
-                style={
-                  styles.footerText
-                }
-              >
-                Powered by KINX
+              <Text style={styles.footerText}>
+                Powered by KYNX
               </Text>
             </View>
           </ScrollView>
@@ -320,10 +346,18 @@ console.log("Signup button pressed");
   );
 }
 
+// ==========================
+// STYLES
+// ==========================
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#061014",
+  },
+
+  keyboardContainer: {
+    flex: 1,
   },
 
   content: {
@@ -387,7 +421,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#0C1D21",
     borderWidth: 1,
     borderColor: "#244247",
-    paddingHorizontal: 16,
+    paddingLeft: 16,
+    paddingRight: 10,
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 20,
@@ -395,8 +430,16 @@ const styles = StyleSheet.create({
 
   passwordInput: {
     flex: 1,
+    height: "100%",
     color: "#FFFFFF",
     fontSize: 15,
+  },
+
+  eyeButton: {
+    width: 42,
+    height: 46,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   eye: {
@@ -410,6 +453,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginTop: 12,
+  },
+
+  disabledButton: {
+    opacity: 0.65,
   },
 
   signupButtonText: {
