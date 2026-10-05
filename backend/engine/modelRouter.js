@@ -10,7 +10,7 @@ export function selectModel({
   if (hasImage) {
     return {
       provider: "openai",
-      model: "gpt-5.6-terra",
+      model: "gpt-5.6-sol",
     };
   }
 
@@ -40,25 +40,25 @@ export function selectModel({
     case "coding":
       return {
         provider: "openai",
-        model: "gpt-5.6-terra",
+        model: "gpt-5.6-sol",
       };
 
     case "reasoning":
       return {
         provider: "openai",
-        model: "gpt-5.6-terra",
+        model: "gpt-5.6-sol",
       };
 
     case "search":
       return {
         provider: "openai",
-        model: "gpt-5.6-terra",
+        model: "gpt-5.6-sol",
       };
 
     default:
       return {
         provider: "openai",
-        model: "gpt-5.6-terra",
+        model: "gpt-5.6-sol",
       };
   }
 }

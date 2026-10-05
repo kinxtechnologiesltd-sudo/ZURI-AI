@@ -42,7 +42,7 @@ export async function generateOpenAIImage({
 
   // Use the image model available to
   // your OpenAI API project.
-  const IMAGE_MODEL = "gpt-image-1";
+  const IMAGE_MODEL = "gpt-image-2";
 
   console.log(
     "🔎 TRACE OPENAI IMAGE REQUEST:",
