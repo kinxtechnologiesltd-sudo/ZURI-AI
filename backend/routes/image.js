@@ -37,6 +37,7 @@ router.post(
 
       const result =
         await generateImage({
+          userId: req.user.uid,
           prompt,
         });
 

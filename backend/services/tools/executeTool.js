@@ -2,6 +2,11 @@ import { adminDb } from "../../config/firebase.js";
 
 import { generateFalComic } from "../../providers/fal/comic.js";
 import { generateImage } from "../imageGeneration.js";
+import {
+  commitImageGeneration,
+  releaseImageGeneration,
+  reserveImageGeneration,
+} from "../imageQuota.js";
 import { generateMusic } from "../musicGeneration.js";
 import { generateVideoWithAudio } from "../videoWithAudio.js";
 
@@ -21,10 +26,6 @@ import { weatherTool } from "./weatherTool.js";
  * These features require Zuri Pro or Ultra.
  */
 
-const PRO_TOOLS = new Set([
-  "image-generation",
-]);
-
 /**
  * ===========================================
  * ULTRA-ONLY TOOLS
@@ -37,7 +38,6 @@ const ULTRA_TOOLS = new Set([
   "music-generation",
   "video-generation",
   "animation",
-  "comic-generation",
 ]);
 
 /**
@@ -160,38 +160,6 @@ async function checkToolAccess(
             /-/g,
             " "
           )} feature is exclusive to Zuri Ultra. Please upgrade to Ultra to use it.`,
-      };
-    }
-
-    return {
-      allowed: true,
-      plan,
-    };
-  }
-
-  /**
-   * =========================================
-   * PRO + ULTRA
-   * =========================================
-   */
-
-  if (
-    PRO_TOOLS.has(tool)
-  ) {
-    const plan =
-      await getUserPlan(
-        userId
-      );
-
-    if (
-      plan !== "pro" &&
-      plan !== "ultra"
-    ) {
-      return {
-        allowed: false,
-        plan,
-        message:
-          "Image generation is available on Zuri Pro and Zuri Ultra. Please upgrade your plan to generate images.",
       };
     }
 
@@ -456,6 +424,7 @@ export async function executeTool(
 
       const result =
         await generateImage({
+          userId: context?.userId,
           prompt:
             context?.message ||
             step?.query ||
@@ -519,8 +488,56 @@ export async function executeTool(
     "🎨 COMIC TOOL EXECUTING:"
   );
 
-  const result =
-    await generateFalComic({
+  const userId = context?.userId;
+  let dateKey;
+  let quotaReserved = false;
+
+  if (userId) {
+    try {
+      const reservation =
+        await reserveImageGeneration(userId);
+      dateKey = reservation.dateKey;
+      quotaReserved =
+        reservation.reservationCreated !== false;
+    } catch (error) {
+      if (error?.code === "IMAGE_DAILY_LIMIT_REACHED") {
+        return JSON.stringify({
+          success: false,
+          provider: "fal",
+          type: "comic",
+          imageUrl: null,
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  const releaseReservation = async () => {
+    if (!quotaReserved) {
+      return;
+    }
+
+    quotaReserved = false;
+
+    try {
+      await releaseImageGeneration(
+        userId,
+        dateKey
+      );
+    } catch (error) {
+      console.error(
+        "Failed to release comic generation quota:",
+        error
+      );
+    }
+  };
+
+  let result;
+
+  try {
+    result = await generateFalComic({
       prompt:
         context?.message ||
         step?.query ||
@@ -534,6 +551,10 @@ export async function executeTool(
         context?.aspectRatio ||
         "4:3",
     });
+  } catch (error) {
+    await releaseReservation();
+    throw error;
+  }
 
   console.log(
     "🎨 COMIC RESULT:",
@@ -559,6 +580,8 @@ export async function executeTool(
    */
 
   if (!result?.success) {
+    await releaseReservation();
+
     console.error(
       "❌ Comic generation failed:",
       result?.error ||
@@ -602,6 +625,8 @@ export async function executeTool(
     null;
 
   if (!imageUrl) {
+    await releaseReservation();
+
     console.error(
       "❌ Comic generation succeeded but no image URL was returned."
     );
@@ -622,6 +647,13 @@ export async function executeTool(
       message:
         "Comic was generated but no image URL was returned.",
     });
+  }
+
+  if (quotaReserved) {
+    await commitImageGeneration(
+      userId,
+      dateKey
+    );
   }
 
   console.log(

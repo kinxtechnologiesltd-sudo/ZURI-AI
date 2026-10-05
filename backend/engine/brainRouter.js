@@ -945,31 +945,48 @@ function detectImageRequest(message) {
     return false;
   }
 
-  const explicitImagePatterns = [
-    /\bgenerate\s+(an?\s+)?image\b/i,
-    /\bcreate\s+(an?\s+)?image\b/i,
-    /\bmake\s+(an?\s+)?image\b/i,
+  if (
+    /\b(create|make|generate|draw)\b[\s\S]{0,80}\b(comic|comics|comic page|comic panel|comic panels)\b/i.test(
+      text
+    )
+  ) {
+    return false;
+  }
 
-    /\bgenerate\s+(a\s+)?picture\b/i,
-    /\bcreate\s+(a\s+)?picture\b/i,
-    /\bmake\s+(a\s+)?picture\b/i,
+  const visualTarget =
+    "(?:images?|pictures?|photos?|photographs?|artworks?|art|illustrations?|drawings?|visuals?|scenes?|portraits?|landscapes?|posters?|flyers?|banners?|brochures?|invitations?|cards?|social\\s+media\\s+graphics?|advertisements?|adverts?|thumbnails?|covers?|album\\s+covers?|book\\s+covers?|presentation\\s+graphics?|diagrams?|infographics?|flowcharts?|charts?|graphs?|maps?|timelines?|mind\\s+maps?|schematics?|technical\\s+illustrations?|educational\\s+illustrations?|logos?|icons?|brand\\s+marks?|mascots?|packaging|product\\s+mockups?|brand\\s+visuals?|concept\\s+art|character\\s+designs?|manga|storyboards?|fantasy\\s+art|cinematic\\s+scenes?|architecture|3d\\s+renders?|visualizations?)";
 
-    /\bgenerate\s+(a\s+)?photo\b/i,
-    /\bcreate\s+(a\s+)?photo\b/i,
-
-    /\bgenerate\s+(some\s+)?artwork\b/i,
-    /\bcreate\s+(some\s+)?artwork\b/i,
-    /\bmake\s+(some\s+)?artwork\b/i,
-
-    /\bdraw\b/i,
-    /\billustration\b/i,
-    /\bportrait\b/i,
-    /\bwallpaper\b/i,
-    /\bposter\b/i,
-    /\bgraphic\b/i,
-  ];
-
-  return explicitImagePatterns.some(
-    (pattern) => pattern.test(text)
+  const creationRequest = new RegExp(
+    `\\b(?:create|generate|make|draw|design|produce|render|illustrate|visualize|depict|compose)\\b(?:\\s+[\\w'-]+){0,6}\\s+${visualTarget}\\b`,
+    "i"
   );
+  const statedRequest = new RegExp(
+    `\\b(?:i\\s+)?(?:need|want|would\\s+like)\\b(?:\\s+[\\w'-]+){0,3}\\s+${visualTarget}\\b`,
+    "i"
+  );
+  const giveRequest = new RegExp(
+    `\\bgive\\s+me\\s+(?:a|an|some)\\s+${visualTarget}\\b`,
+    "i"
+  );
+  const informationalRequest =
+    /^(?:what\b|why\b|how\b|when\b|where\b|who\b|tell me about\b|tell me how\b|explain\b|describe\b|define\b|can you explain\b|can you tell me how\b)/i;
+  const hypotheticalVisualRequest =
+    /\bshow\s+me\s+what\b[^.!?;\n]{0,100}\bwould\s+look\s+like\b/i;
+
+  return text
+    .split(/[.!?;\n]+/)
+    .some((clause) => {
+      const request = clause.trim();
+
+      if (!request || informationalRequest.test(request)) {
+        return false;
+      }
+
+      return (
+        creationRequest.test(request) ||
+        statedRequest.test(request) ||
+        giveRequest.test(request) ||
+        hypotheticalVisualRequest.test(request)
+      );
+    });
 }

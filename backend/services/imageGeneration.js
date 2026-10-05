@@ -2,6 +2,11 @@ import { selectImageProvider } from "../engine/imageRouter.js";
 import { generateFalComic } from "../providers/falComics.js";
 import { generateOpenAIImage } from "../providers/openaiImages.js";
 import { addZuriWatermark } from "./imageWatermark.js";
+import {
+  commitImageGeneration,
+  releaseImageGeneration,
+  reserveImageGeneration,
+} from "./imageQuota.js";
 
 /**
  * ===========================================
@@ -20,6 +25,7 @@ import { addZuriWatermark } from "./imageWatermark.js";
  */
 
 export async function generateImage({
+  userId,
   prompt,
   size = "1024x1024",
   quality = "high",
@@ -55,129 +61,164 @@ export async function generateImage({
   );
 
   let result;
-
-  // =========================================
-  // OPENAI
-  // =========================================
-
-  if (provider === "openai") {
-    console.log(
-      "🎨 Sending image request to OpenAI..."
-    );
-
-    result =
-      await generateOpenAIImage({
-        prompt,
-        size,
-        quality,
-      });
-
-    if (result?.success) {
-      console.log(
-        "✅ OpenAI image generated successfully."
-      );
-    }
-  }
-
-  // =========================================
-  // FAL — COMICS
-  // =========================================
-
-  else if (provider === "fal") {
-    console.log(
-      "🎨 Sending comic request to Fal..."
-    );
-
-    result =
-      await generateFalComic({
-        prompt,
-      });
-
-    if (result?.success) {
-      console.log(
-        "✅ Fal comic generated successfully."
-      );
-    }
-  }
-
-  // =========================================
-  // UNKNOWN PROVIDER
-  // =========================================
-
-  else {
-    throw new Error(
-      `Unsupported image provider: ${provider}`
-    );
-  }
-
-  // =========================================
-  // VALIDATE RESULT
-  // =========================================
-
-  if (!result?.success) {
-    throw new Error(
-      result?.message ||
-        "Image generation failed."
-    );
-  }
-
-  if (!result?.buffer) {
-    throw new Error(
-      "Image provider returned no image buffer."
-    );
-  }
-
-  // =========================================
-  // WATERMARK
-  // =========================================
-  //
-  // IMPORTANT:
-  //
-  // Our Fal provider already applies the
-  // watermark in falComics.js.
-  //
-  // OpenAI does NOT apply it there.
-  //
-  // Therefore:
-  //
-  // OpenAI → watermark here
-  // Fal    → already watermarked
-  //
-  // This prevents a DOUBLE watermark.
-  // =========================================
-
+  let dateKey;
+  let quotaReserved = false;
   let finalBuffer;
+  let base64;
 
-  if (provider === "openai") {
-    console.log(
-      "🎨 Applying Zuri watermark to OpenAI image..."
-    );
+  try {
+    if (userId) {
+      const reservation =
+        await reserveImageGeneration(userId);
+      dateKey = reservation.dateKey;
+      quotaReserved =
+        reservation.reservationCreated !== false;
+    }
 
-    finalBuffer =
-      await addZuriWatermark(
-        result.buffer
+    // =========================================
+    // OPENAI
+    // =========================================
+
+    if (provider === "openai") {
+      console.log(
+        "🎨 Sending image request to OpenAI..."
       );
 
-    console.log(
-      "✅ Zuri watermark applied."
-    );
-  } else {
-    console.log(
-      "✅ Fal image already contains Zuri watermark."
-    );
+      result =
+        await generateOpenAIImage({
+          prompt,
+          size,
+          quality,
+        });
 
-    finalBuffer =
-      result.buffer;
+      if (result?.success) {
+        console.log(
+          "✅ OpenAI image generated successfully."
+        );
+      }
+    }
+
+    // =========================================
+    // FAL — COMICS
+    // =========================================
+
+    else if (provider === "fal") {
+      console.log(
+        "🎨 Sending comic request to Fal..."
+      );
+
+      result =
+        await generateFalComic({
+          prompt,
+        });
+
+      if (result?.success) {
+        console.log(
+          "✅ Fal comic generated successfully."
+        );
+      }
+    }
+
+    // =========================================
+    // UNKNOWN PROVIDER
+    // =========================================
+
+    else {
+      throw new Error(
+        `Unsupported image provider: ${provider}`
+      );
+    }
+
+    // =========================================
+    // VALIDATE RESULT
+    // =========================================
+
+    if (!result?.success) {
+      throw new Error(
+        result?.message ||
+          "Image generation failed."
+      );
+    }
+
+    if (!result?.buffer) {
+      throw new Error(
+        "Image provider returned no image buffer."
+      );
+    }
+
+    // =========================================
+    // WATERMARK
+    // =========================================
+    //
+    // IMPORTANT:
+    //
+    // Our Fal provider already applies the
+    // watermark in falComics.js.
+    //
+    // OpenAI does NOT apply it there.
+    //
+    // Therefore:
+    //
+    // OpenAI → watermark here
+    // Fal    → already watermarked
+    //
+    // This prevents a DOUBLE watermark.
+    // =========================================
+
+    if (provider === "openai") {
+      console.log(
+        "🎨 Applying Zuri watermark to OpenAI image..."
+      );
+
+      finalBuffer =
+        await addZuriWatermark(
+          result.buffer
+        );
+
+      console.log(
+        "✅ Zuri watermark applied."
+      );
+    } else {
+      console.log(
+        "✅ Fal image already contains Zuri watermark."
+      );
+
+      finalBuffer =
+        result.buffer;
+    }
+
+    // =========================================
+    // BASE64
+    // =========================================
+
+    base64 =
+      finalBuffer.toString(
+        "base64"
+      );
+  } catch (error) {
+    if (quotaReserved) {
+      try {
+        await releaseImageGeneration(
+          userId,
+          dateKey
+        );
+      } catch (releaseError) {
+        console.error(
+          "Failed to release image generation quota:",
+          releaseError
+        );
+      }
+    }
+
+    throw error;
   }
 
-  // =========================================
-  // BASE64
-  // =========================================
-
-  const base64 =
-    finalBuffer.toString(
-      "base64"
+  if (quotaReserved) {
+    await commitImageGeneration(
+      userId,
+      dateKey
     );
+  }
 
   // =========================================
   // RETURN
