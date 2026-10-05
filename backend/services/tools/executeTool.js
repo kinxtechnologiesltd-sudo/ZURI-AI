@@ -410,13 +410,24 @@ export async function executeTool(
         "🎨 IMAGE TOOL EXECUTING:"
       );
 
+      const userId = context?.userId;
+
+      if (!userId) {
+        return JSON.stringify({
+          success: false,
+          blocked: true,
+          message:
+            "Authentication is required for image generation.",
+        });
+      }
+
       console.log(
         "🎨 Provider will be selected by image router."
       );
 
       const result =
         await generateImage({
-          userId: context?.userId,
+          userId,
           prompt:
             context?.message ||
             step?.query ||
@@ -444,6 +455,19 @@ export async function executeTool(
       );
 
       if (!result?.success) {
+        if (result?.blocked === true) {
+          return JSON.stringify({
+            success: false,
+            blocked: true,
+            ...(result?.quotaExceeded === true && {
+              quotaExceeded: true,
+            }),
+            message:
+              result?.message ||
+              "Image generation failed.",
+          });
+        }
+
         return JSON.stringify({
           success: false,
 
@@ -481,29 +505,36 @@ export async function executeTool(
   );
 
   const userId = context?.userId;
+
+  if (!userId) {
+    return JSON.stringify({
+      success: false,
+      blocked: true,
+      message:
+        "Authentication is required for image generation.",
+    });
+  }
+
   let dateKey;
   let quotaReserved = false;
 
-  if (userId) {
-    try {
-      const reservation =
-        await reserveImageGeneration(userId);
-      dateKey = reservation.dateKey;
-      quotaReserved =
-        reservation.reservationCreated !== false;
-    } catch (error) {
-      if (error?.code === "IMAGE_DAILY_LIMIT_REACHED") {
-        return JSON.stringify({
-          success: false,
-          provider: "fal",
-          type: "comic",
-          imageUrl: null,
-          message: error.message,
-        });
-      }
-
-      throw error;
+  try {
+    const reservation =
+      await reserveImageGeneration(userId);
+    dateKey = reservation.dateKey;
+    quotaReserved =
+      reservation.reservationCreated !== false;
+  } catch (error) {
+    if (error?.code === "IMAGE_DAILY_LIMIT_REACHED") {
+      return JSON.stringify({
+        success: false,
+        blocked: true,
+        quotaExceeded: true,
+        message: error.message,
+      });
     }
+
+    throw error;
   }
 
   const releaseReservation = async () => {

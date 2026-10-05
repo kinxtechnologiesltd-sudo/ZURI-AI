@@ -31,6 +31,12 @@ export async function generateImage({
   quality = "high",
   edit = false,
 }) {
+  if (!userId) {
+    throw new Error(
+      "Authentication is required for image generation."
+    );
+  }
+
   if (!prompt?.trim()) {
     throw new Error("Image prompt is required.");
   }
@@ -67,13 +73,27 @@ export async function generateImage({
   let base64;
 
   try {
-    if (userId) {
-      const reservation =
+    let reservation;
+
+    try {
+      reservation =
         await reserveImageGeneration(userId);
-      dateKey = reservation.dateKey;
-      quotaReserved =
-        reservation.reservationCreated !== false;
+    } catch (error) {
+      if (error?.code === "IMAGE_DAILY_LIMIT_REACHED") {
+        return {
+          success: false,
+          blocked: true,
+          quotaExceeded: true,
+          message: error.message,
+        };
+      }
+
+      throw error;
     }
+
+    dateKey = reservation.dateKey;
+    quotaReserved =
+      reservation.reservationCreated !== false;
 
     // =========================================
     // OPENAI

@@ -1099,6 +1099,30 @@ export async function runZuri({
       preferences,
     });
 
+  const parsedMediaResult =
+    parseToolResult(context.directMediaResult);
+
+  if (
+    parsedMediaResult?.blocked === true &&
+    parsedMediaResult?.message
+  ) {
+    return {
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: parsedMediaResult.message,
+          },
+        },
+      ],
+      videoUrl: null,
+      imageUrl: null,
+      musicTaskId: null,
+      audioUrl: null,
+      researchImages: context.researchImages || [],
+    };
+  }
+
   console.log(
     "🚨 DIRECT MEDIA CHECK:",
     context.directMediaTool
@@ -1359,6 +1383,30 @@ export async function runZuriStream({
       memories,
       preferences,
     });
+
+  const parsedMediaResult =
+    parseToolResult(context.directMediaResult);
+
+  if (
+    parsedMediaResult?.blocked === true &&
+    parsedMediaResult?.message
+  ) {
+    return {
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: parsedMediaResult.message,
+          },
+        },
+      ],
+      videoUrl: null,
+      imageUrl: null,
+      musicTaskId: null,
+      audioUrl: null,
+      researchImages: context.researchImages || [],
+    };
+  }
 
   if (
     context.videoUrl ||
