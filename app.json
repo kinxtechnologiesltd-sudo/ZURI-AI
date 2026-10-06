@@ -40,7 +40,20 @@
           "imageWidth": 76
         }
       ],
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Zuri to access your microphone for voice conversations."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Zuri to save generated images to your gallery.",
+          "savePhotosPermission": "Allow Zuri to save generated images to your gallery.",
+          "granularPermissions": ["photo"]
+        }
+      ],
       "expo-secure-store",
       "expo-image",
       "expo-status-bar",

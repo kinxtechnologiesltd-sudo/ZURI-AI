@@ -279,7 +279,7 @@ export default function History() {
           </Text>
 
           <Text style={styles.footerKinx}>
-            Powered by KINX
+            Powered by KYNX
           </Text>
         </View>
       </ScrollView>

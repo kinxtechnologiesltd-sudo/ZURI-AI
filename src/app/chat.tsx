@@ -1,6 +1,7 @@
 import {
   AudioModule,
   RecordingPresets,
+  useAudioPlayer,
   useAudioRecorder,
 } from "expo-audio";
 import ZuriLogo from "../asset/images/zuri-icon.png (2).png";
@@ -9,6 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -38,6 +40,10 @@ import {
 } from "../hooks/conversationService";
 import { uploadGeneratedImage } from "../hooks/imageStorageService";
 import { getMemories } from "../hooks/memoryService";
+import {
+  deleteVoiceAudioFile,
+  saveVoiceAudioFile,
+} from "../utils/voiceAudioFile";
 import useUserPlan from "../hooks/useUserPlan";
 
 const API_BASE_URL =
@@ -49,6 +55,8 @@ type Message = {
   imageUrl?: string;
   videoUrl?: string;
   audioUrl?: string;
+  pdfUrl?: string;
+  pdfName?: string;
   researchImages?: Array<{
     url: string;
     title?: string | null;
@@ -128,6 +136,9 @@ export default function Chat() {
   const audioRecorder = useAudioRecorder(
     RecordingPresets.HIGH_QUALITY
   );
+  const webRecordingStartedAt = useRef<number | null>(null);
+  const voicePlayer = useAudioPlayer(null);
+  const voiceAudioFileUri = useRef<string | null>(null);
 
   const [isRecording, setIsRecording] =
     useState(false);
@@ -144,6 +155,17 @@ export default function Chat() {
     useState(false);
 
   const { isProUser } = useUserPlan();
+
+  const showChatAlert = (
+    title: string,
+    message: string
+  ) => {
+    if (Platform.OS === "web") {
+      window.alert(`${title}\n\n${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
 
   const [isVoiceMode, setIsVoiceMode] =
     useState(false);
@@ -192,26 +214,63 @@ const inputRef = useRef<TextInput>(null);
     );
   }, [isProUser]);
 
+  useEffect(() => {
+    const subscription = voicePlayer.addListener(
+      "playbackStatusUpdate",
+      (status) => {
+        if (!status.didJustFinish) return;
+
+        const fileUri = voiceAudioFileUri.current;
+        voiceAudioFileUri.current = null;
+        if (fileUri) {
+          deleteVoiceAudioFile(fileUri);
+        }
+      }
+    );
+
+    return () => {
+      subscription.remove();
+      const fileUri = voiceAudioFileUri.current;
+      voiceAudioFileUri.current = null;
+      if (fileUri) {
+        deleteVoiceAudioFile(fileUri);
+      }
+    };
+  }, [voicePlayer]);
+
   async function toggleRecording() {
+    if (!isProUser) {
+      showChatAlert(
+        "Zuri Voice is a Pro feature",
+        "Upgrade to Pro or Ultra to use voice conversations."
+      );
+      return;
+    }
+
     try {
       // STOP RECORDING
       if (isRecording) {
+        const webRecordingDurationMs =
+          Platform.OS === "web" && webRecordingStartedAt.current !== null
+            ? Date.now() - webRecordingStartedAt.current
+            : null;
         await audioRecorder.stop();
         setIsRecording(false);
+        webRecordingStartedAt.current = null;
+        if (Platform.OS === "web") {
+          console.log(
+            "Recording stopped (duration seconds):",
+            webRecordingDurationMs === null
+              ? null
+              : webRecordingDurationMs / 1000
+          );
+        }
 
         const audioUri = audioRecorder.uri;
 
         if (!audioUri) {
-          console.log(
-            "No recording URI found."
-          );
           return;
         }
-
-        console.log(
-          "Recording saved:",
-          audioUri
-        );
 
         const audioResponse =
           await fetch(audioUri);
@@ -219,29 +278,78 @@ const inputRef = useRef<TextInput>(null);
         const audioBlob =
           await audioResponse.blob();
 
-        console.log(
-          "audioBlob:",
-          audioBlob
+        const uriExtension = audioUri
+          .split(/[?#]/)[0]
+          .match(/\.(m4a|webm|3gp|wav|mp3|aac|ogg)$/i)?.[1]
+          ?.toLowerCase();
+        const blobMimeType = audioBlob.type
+          .split(";")[0]
+          .trim()
+          .toLowerCase();
+        const extensionFromMimeType: Record<string, string> = {
+          "audio/mp4": "m4a",
+          "audio/x-m4a": "m4a",
+          "audio/webm": "webm",
+          "audio/3gpp": "3gp",
+          "audio/wav": "wav",
+          "audio/x-wav": "wav",
+          "audio/mpeg": "mp3",
+          "audio/aac": "aac",
+          "audio/ogg": "ogg",
+        };
+        const mimeTypeFromExtension: Record<string, string> = {
+          m4a: "audio/mp4",
+          webm: "audio/webm",
+          "3gp": "audio/3gpp",
+          wav: "audio/wav",
+          mp3: "audio/mpeg",
+          aac: "audio/aac",
+          ogg: "audio/ogg",
+        };
+        const audioExtension =
+          uriExtension ||
+          extensionFromMimeType[blobMimeType] ||
+          (Platform.OS === "web" ? "webm" : "m4a");
+        const audioMimeType =
+          mimeTypeFromExtension[audioExtension] ||
+          blobMimeType ||
+          "application/octet-stream";
+        const uploadBlob = audioBlob.slice(
+          0,
+          audioBlob.size,
+          audioMimeType
         );
-        console.log(
-          "Blob size:",
-          audioBlob.size
-        );
-        console.log(
-          "Blob type:",
-          audioBlob.type
-        );
+        const uploadFilename = `zuri-voice.${audioExtension}`;
+
+        if (Platform.OS === "web") {
+          console.log(
+            "Browser MediaRecorder MIME type:",
+            audioBlob.type
+          );
+          console.log(
+            "Blob size (bytes):",
+            audioBlob.size
+          );
+          console.log(
+            "Blob type:",
+            audioBlob.type
+          );
+          console.log(
+            "Blob filename/extension:",
+            uploadFilename
+          );
+          console.log(
+            "Upload MIME type:",
+            uploadBlob.type
+          );
+        }
 
         const formData = new FormData();
 
         formData.append(
           "audio",
-          audioBlob,
-          "zuri-voice.webm"
-        );
-
-        console.log(
-          "Sending voice to Zuri..."
+          uploadBlob,
+          uploadFilename
         );
 
         const transcriptionResponse =
@@ -256,15 +364,12 @@ const inputRef = useRef<TextInput>(null);
         const responseText =
           await transcriptionResponse.text();
 
-        console.log(
-          "🎙️ TRANSCRIBE HTTP STATUS:",
-          transcriptionResponse.status
-        );
-
-        console.log(
-          "🎙️ TRANSCRIBE RAW RESPONSE:",
-          responseText
-        );
+        if (Platform.OS === "web") {
+          console.log(
+            "TRANSCRIPTION HTTP STATUS:",
+            transcriptionResponse.status
+          );
+        }
 
         let data: any;
 
@@ -284,10 +389,12 @@ const inputRef = useRef<TextInput>(null);
           );
         }
 
-        console.log(
-          "🎙️ TRANSCRIPTION RESULT:",
-          data
-        );
+        if (Platform.OS === "web") {
+          console.log(
+            "TRANSCRIPTION TEXT:",
+            data.text || ""
+          );
+        }
 
         if (data.text) {
           const transcribedText =
@@ -313,24 +420,24 @@ const inputRef = useRef<TextInput>(null);
         await AudioModule.requestRecordingPermissionsAsync();
 
       if (!permission.granted) {
-        alert(
+        showChatAlert(
+          "Permission Required",
           "Microphone permission is required to use Zuri Voice."
         );
         return;
       }
 
       await audioRecorder.prepareToRecordAsync();
+      if (Platform.OS === "web") {
+        webRecordingStartedAt.current = Date.now();
+      }
       audioRecorder.record();
 
       setIsRecording(true);
-
-      console.log("Recording started");
+      if (Platform.OS === "web") {
+        console.log("Recording started");
+      }
     } catch (error) {
-      console.error(
-        "Voice error:",
-        error
-      );
-
       setIsRecording(false);
     }
   }
@@ -491,10 +598,7 @@ const inputRef = useRef<TextInput>(null);
   const speakZuriReply = async (
     text: string
   ) => {
-    if (!isProUser) {
-      speakBrowserVoice(text);
-      return;
-    }
+    if (!isProUser) return;
 
     try {
       const voiceId =
@@ -507,53 +611,63 @@ const inputRef = useRef<TextInput>(null);
         voiceGender
       );
 
-      const response = await fetch(
-        `${API_BASE_URL}/chat`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            text,
-            voiceId,
-          }),
-        }
-      );
+const user = auth.currentUser;
 
+if (!user) {
+  throw new Error("You must be signed in to use Zuri Voice.");
+}
+
+const idToken = await user.getIdToken();
+const response = await fetch(
+  `${API_BASE_URL}/voice/speak`,
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({
+      text,
+      voiceId,
+    }),
+  }
+);
       if (!response.ok) {
-        console.log(
-          "Pro voice unavailable. Using standard voice."
+        throw new Error(
+          `Voice service returned ${response.status}.`
         );
+      }
 
-        speakBrowserVoice(text);
+      if (Platform.OS === "web") {
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        audio.onended = () => URL.revokeObjectURL(audioUrl);
+        await audio.play();
         return;
       }
 
-      const audioBlob =
-        await response.blob();
+      const audioFileUri = await saveVoiceAudioFile(response);
 
-      const audioUrl =
-        URL.createObjectURL(audioBlob);
-
-      const audio =
-        new Audio(audioUrl);
-
-      audio.onended = () => {
-        URL.revokeObjectURL(
-          audioUrl
-        );
-      };
-
-      await audio.play();
+      const previousFileUri = voiceAudioFileUri.current;
+      voicePlayer.replace({ uri: audioFileUri });
+      voiceAudioFileUri.current = audioFileUri;
+      if (previousFileUri) {
+        deleteVoiceAudioFile(previousFileUri);
+      }
+      voicePlayer.play();
     } catch (error) {
       console.error(
         "Zuri Pro voice error:",
         error
       );
 
-      speakBrowserVoice(text);
+      showChatAlert(
+        "Voice Unavailable",
+        error instanceof Error
+          ? error.message
+          : "Zuri could not play the voice response. Please try again."
+      );
     }
   };
 
@@ -590,6 +704,10 @@ const inputRef = useRef<TextInput>(null);
               message.videoUrl,
             audioUrl:
               message.audioUrl,
+            pdfUrl:
+              message.pdfUrl,
+            pdfName:
+              message.pdfName,
             researchImages:
               Array.isArray(
                 message.researchImages
@@ -1166,6 +1284,12 @@ const inputRef = useRef<TextInput>(null);
           audioUrl:
             audioUrl ||
             undefined,
+          pdfUrl:
+            data.pdfUrl ||
+            undefined,
+          pdfName:
+            data.pdfName ||
+            undefined,
           researchImages:
             Array.isArray(
               data.researchImages
@@ -1180,12 +1304,16 @@ const inputRef = useRef<TextInput>(null);
           conversationId,
           "ai",
           finalReply,
-          undefined,
+          data.imageUrl || undefined,
           Array.isArray(
             data.researchImages
           )
             ? data.researchImages
-            : []
+            : [],
+          data.videoUrl || undefined,
+          audioUrl || data.audioUrl || undefined,
+          data.pdfUrl || undefined,
+          data.pdfName || undefined
         );
       }
 
@@ -1271,15 +1399,17 @@ const inputRef = useRef<TextInput>(null);
             styles.chatContent,
             isMobile &&
               styles.mobileChatContent,
-          isSmallPhone &&
-  styles.smallPhoneSendButton,
           ]}
         >
 {messages.length === 0 && (
   <View style={styles.emptyZuri}>
     <Image
       source={ZuriLogo}
-      style={styles.emptyZuriLogo}
+      style={[
+        styles.emptyZuriLogo,
+        isMobile && styles.mobileEmptyZuriLogo,
+        isSmallPhone && styles.smallPhoneEmptyZuriLogo,
+      ]}
       resizeMode="contain"
     />
   </View>
@@ -1299,6 +1429,12 @@ const inputRef = useRef<TextInput>(null);
                 }
                 audioUrl={
                   message.audioUrl
+                }
+                pdfUrl={
+                  message.pdfUrl
+                }
+                pdfName={
+                  message.pdfName
                 }
                 researchImages={
                   message.researchImages ||
@@ -1701,7 +1837,7 @@ const inputRef = useRef<TextInput>(null);
                       styles.zuriPanelBadgeText
                     }
                   >
-                    POWERED BY KINX
+                    POWERED BY KYNX
                   </Text>
                 </View>
 
@@ -1979,23 +2115,23 @@ const styles = StyleSheet.create({
     borderTopColor: "#172B30",
   },
 
-mobileInputContainer: {
-  paddingHorizontal: 7,
-  paddingTop: 5,
-  paddingBottom: 14,
-  minHeight: 58,
-},
+  mobileInputContainer: {
+    paddingHorizontal: 7,
+    paddingTop: 5,
+    paddingBottom: 14,
+    minHeight: 58,
+  },
 
   smallPhoneInputContainer: {
     paddingHorizontal: 5,
     paddingTop: 6,
     paddingBottom: 6,
   },
-smallPhoneActionButton: {
-  width: 38,
-  height: 38,
-  borderRadius: 19,
-},
+  smallPhoneActionButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+  },
   /* ==========================
      INPUT
   ========================== */
@@ -2038,21 +2174,21 @@ smallPhoneActionButton: {
      SEND
   ========================== */
 
-sendButton: {
-  width: 52,
-  height: 52,
-  minWidth: 44,
-  minHeight: 44,
-  flexShrink: 0,
-  marginLeft: 10,
-  backgroundColor: "#18BEB3",
-  borderRadius: 17,
-  borderWidth: 1,
-  borderColor: "#4AD8CE",
-  justifyContent: "center",
-  alignItems: "center",
-  overflow: "visible",
-},
+  sendButton: {
+    width: 52,
+    height: 52,
+    minWidth: 44,
+    minHeight: 44,
+    flexShrink: 0,
+    marginLeft: 10,
+    backgroundColor: "#18BEB3",
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#4AD8CE",
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "visible",
+  },
  mobileSendButton: {
   width: 42,
   height: 42,
@@ -2268,6 +2404,17 @@ emptyZuriLogo: {
   width: 800,
   height: 750,
 },
+
+mobileEmptyZuriLogo: {
+  width: 230,
+  height: 215,
+},
+
+smallPhoneEmptyZuriLogo: {
+  width: 195,
+  height: 185,
+},
+
   mobileHistoryTitle: {
     color: "#F5F3EC",
     fontSize: 18,

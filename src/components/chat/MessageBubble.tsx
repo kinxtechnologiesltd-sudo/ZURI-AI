@@ -1,16 +1,17 @@
 import {
   Image,
   Linking,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-
+import { useState } from "react";
+import * as Clipboard from "expo-clipboard";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { saveGeneratedImage } from "./generatedImageDownload";
 
 type ResearchImage = {
   url: string;
@@ -560,7 +561,21 @@ export default function MessageBubble({
   researchImages = [],
 }: MessageBubbleProps) {
   const isUser = sender === "user";
+const [copied, setCopied] = useState(false);
 
+const handleCopy = async () => {
+  try {
+    await Clipboard.setStringAsync(text);
+
+    setCopied(true);
+
+    setTimeout(() => {
+      setCopied(false);
+    }, 2000);
+  } catch (error) {
+    console.error("Failed to copy message:", error);
+  }
+};
   const safeVideoUrl =
     typeof videoUrl === "string"
       ? videoUrl.trim()
@@ -636,18 +651,32 @@ export default function MessageBubble({
           )}
         </View>
 
-        {!!text && (
-          <View
-            style={[
-              styles.bubble,
-              isUser
-                ? styles.userBubble
-                : styles.aiBubble,
-            ]}
-          >
-            {renderMarkdown(text, isUser)}
-          </View>
-        )}
+   {!!text && (
+  <>
+    <View
+      style={[
+        styles.bubble,
+        isUser
+          ? styles.userBubble
+          : styles.aiBubble,
+      ]}
+    >
+      {renderMarkdown(text, isUser)}
+    </View>
+
+    {!isUser && (
+      <TouchableOpacity
+        style={styles.copyButton}
+        activeOpacity={0.7}
+        onPress={handleCopy}
+      >
+        <Text style={styles.copyButtonText}>
+          {copied ? "✓ Copied" : "⧉ Copy"}
+        </Text>
+      </TouchableOpacity>
+    )}
+  </>
+)}
 
         {!isUser && safePdfUrl && (
           <TouchableOpacity
@@ -828,15 +857,13 @@ export default function MessageBubble({
               style={styles.nativeDownloadButton}
               activeOpacity={0.8}
               onPress={() => {
-                void Linking.openURL(
-                  safeImageUrl
-                );
+                void saveGeneratedImage(safeImageUrl);
               }}
             >
               <Text
                 style={styles.nativeDownloadText}
               >
-                ↗ Open / Save Image
+                ↓ Download Image
               </Text>
             </TouchableOpacity>
           </View>
@@ -1221,7 +1248,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
+copyButton: {
+  alignSelf: "flex-start",
+  marginTop: 7,
+  paddingHorizontal: 10,
+  paddingVertical: 6,
+  borderRadius: 9,
+  backgroundColor: "#10282D",
+  borderWidth: 1,
+  borderColor: "#29474C",
+},
 
+copyButtonText: {
+  color: "#19C8BC",
+  fontSize: 11,
+  fontWeight: "700",
+},
   researchHeaderDot: {
     width: 6,
     height: 6,
