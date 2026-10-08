@@ -1,4 +1,0 @@
-<resources>
-  <item name="zuri_launcher" type="mipmap">@mipmap/ic_launcher</item>
-  <item name="zuri_launcher_round" type="mipmap">@mipmap/ic_launcher_round</item>
-</resources>
