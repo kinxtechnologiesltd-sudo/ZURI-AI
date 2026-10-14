@@ -3,7 +3,7 @@
     "name": "Zuri",
     "slug": "Zuri",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "zuri",
     "userInterfaceStyle": "automatic",
@@ -12,7 +12,11 @@
     },
     "android": {
       "package": "com.kinx.zuri",
-      "icon": "./assets/images/icon.png",
+      "icon": "./assets/images/zuri-launcher.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/zuri-launcher-foreground.png",
+        "backgroundColor": "#061014"
+      },
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.RECORD_AUDIO",
@@ -31,8 +35,11 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "image": "./assets/images/zuri-splash-logo.png",
+          "imageWidth": 220,
+          "android": {
+            "imageWidth": 150
+          }
         }
       ],
       [
