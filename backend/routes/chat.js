@@ -9,14 +9,16 @@ import { runZuri } from "../engine/zuriEngine.js";
 import { getMusicStatus } from "../services/musicGeneration.js";
 import { extractPdfText } from "../services/pdf.js";
 import { generatePdf } from "../services/pdfGeneration.js";
+import {
+  createSecureDownloadToken,
+  ensureGeneratedDirectory,
+  generatedDirectory,
+  saveGeneratedFile,
+} from "../services/generatedFiles.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const generatedDir = path.join(
-  __dirname,
-  "..",
-  "generated"
-);
+const generatedDir = generatedDirectory;
 
 function wantsPdfDocument(message) {
   const text = String(message || "").toLowerCase();
@@ -54,9 +56,7 @@ async function createGeneratedPdf({
   title,
   content,
 }) {
-  await fs.mkdir(generatedDir, {
-    recursive: true,
-  });
+  await ensureGeneratedDirectory();
 
   const pdfBuffer = await generatePdf({
     title,
@@ -73,20 +73,28 @@ async function createGeneratedPdf({
   const filename =
     `${safeName}-${Date.now()}.pdf`;
 
-  const filePath =
-    path.join(
-      generatedDir,
-      filename
-    );
+  const storedFile = await saveGeneratedFile({
+    filename,
+    buffer: pdfBuffer,
+    title,
+  });
 
-  await fs.writeFile(
-    filePath,
-    pdfBuffer
-  );
+  const token = createSecureDownloadToken({
+    filename: storedFile.filename,
+    filePath: storedFile.filePath,
+    provider: storedFile.provider,
+    bucket: storedFile.bucket,
+    objectKey: storedFile.objectKey,
+  });
 
   return {
-    filename,
-    filePath,
+    filename: storedFile.filename,
+    filePath: storedFile.filePath,
+    provider: storedFile.provider,
+    bucket: storedFile.bucket,
+    objectKey: storedFile.objectKey,
+    token,
+    url: `/generated/${token}/${encodeURIComponent(filename)}`,
   };
 }
 
@@ -801,9 +809,7 @@ if (pdfRequest) {
       generated.filename;
 
     pdfUrl =
-      `${req.protocol}://${req.get("host")}/generated/${encodeURIComponent(
-        generated.filename
-      )}`;
+      `${req.protocol}://${req.get("host")}${generated.url}`;
 
     console.log(
       "✅ PDF CREATED:",

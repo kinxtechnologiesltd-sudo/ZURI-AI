@@ -11,6 +11,30 @@ export const ENV = {
     process.env.NODE_ENV ||
     "development",
 
+  PUBLIC_BASE_URL:
+    process.env.PUBLIC_BASE_URL || "http://localhost:3001",
+
+  GENERATED_FILES_DIR:
+    process.env.GENERATED_FILES_DIR || "./generated",
+
+  PDF_STORAGE_PROVIDER:
+    process.env.PDF_STORAGE_PROVIDER || "local",
+
+  R2_ENDPOINT:
+    process.env.R2_ENDPOINT,
+
+  R2_BUCKET_NAME:
+    process.env.R2_BUCKET_NAME,
+
+  R2_ACCESS_KEY_ID:
+    process.env.R2_ACCESS_KEY_ID,
+
+  R2_SECRET_ACCESS_KEY:
+    process.env.R2_SECRET_ACCESS_KEY,
+
+  R2_REGION:
+    process.env.R2_REGION || "auto",
+
   // AI Providers
   GROQ_API_KEY:
     process.env.GROQ_API_KEY,

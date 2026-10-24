@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { selectModel } from '../engine/modelRouter.js';
+import { generatePdf } from '../services/pdfGeneration.js';
+import { createSecureDownloadToken, getSecureDownloadEntry } from '../services/generatedFiles.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,4 +45,33 @@ test('FAL and voice model defaults are centralized in server config', () => {
   assert.match(environmentSource, /FAL_COMIC_MODEL:\s*process\.env\.FAL_COMIC_MODEL \|\| "fal-ai\/flux-2-lora-gallery\/digital-comic-art"/);
   assert.match(environmentSource, /ELEVENLABS_MODEL_ID:\s*process\.env\.ELEVENLABS_MODEL_ID \|\| "eleven_v3"/);
   assert.match(environmentSource, /GROQ_TRANSCRIPTION_MODEL:\s*process\.env\.GROQ_TRANSCRIPTION_MODEL \|\| "whisper-large-v3"/);
+});
+
+test('generated file storage settings include a production R2/S3 adapter and public upload URL base', () => {
+  assert.match(environmentSource, /PDF_STORAGE_PROVIDER:\s*process\.env\.PDF_STORAGE_PROVIDER \|\| "local"/);
+  assert.match(environmentSource, /PUBLIC_BASE_URL:\s*process\.env\.PUBLIC_BASE_URL \|\| "http:\/\/localhost:3001"/);
+  assert.match(environmentSource, /R2_ENDPOINT:\s*process\.env\.R2_ENDPOINT/);
+  assert.match(environmentSource, /R2_BUCKET_NAME:\s*process\.env\.R2_BUCKET_NAME/);
+  assert.match(environmentSource, /R2_ACCESS_KEY_ID:\s*process\.env\.R2_ACCESS_KEY_ID/);
+  assert.match(environmentSource, /R2_SECRET_ACCESS_KEY:\s*process\.env\.R2_SECRET_ACCESS_KEY/);
+});
+
+test('PDF generation creates a valid document buffer and secure download token', async () => {
+  const pdfBuffer = await generatePdf({
+    title: 'Quarterly Summary',
+    content: 'Revenue increased after the launch.\n\nThis is a test PDF.',
+  });
+
+  assert.ok(pdfBuffer instanceof Buffer);
+  assert.match(pdfBuffer.toString('latin1').slice(0, 5), /^%PDF/);
+
+  const token = createSecureDownloadToken({
+    filename: 'quarterly-summary.pdf',
+    filePath: path.join(__dirname, '../generated/quarterly-summary.pdf'),
+  });
+
+  const entry = getSecureDownloadEntry(token, 'quarterly-summary.pdf');
+  assert.ok(entry);
+  assert.equal(entry.filename, 'quarterly-summary.pdf');
+  assert.equal(entry.filePath.endsWith('quarterly-summary.pdf'), true);
 });

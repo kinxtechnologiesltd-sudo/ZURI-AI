@@ -16,6 +16,12 @@ import sunoRouter from "./routes/suno.js";
 import voiceRoutes from "./routes/voice.js";
 
 import { generatePdf } from "./services/pdfGeneration.js";
+import {
+  ensureGeneratedDirectory,
+  getSecureDownloadEntry,
+  generatedDirectory,
+  readGeneratedFileStream,
+} from "./services/generatedFiles.js";
 
 // ===========================================
 // ENVIRONMENT
@@ -34,7 +40,7 @@ console.log(
 // EXPRESS
 // ===========================================
 
-const app = express();
+export const app = express();
 
 // ===========================================
 // PATHS
@@ -50,21 +56,7 @@ const __dirname =
 // GENERATED MEDIA DIRECTORY
 // ===========================================
 
-const generatedDirectory =
-  path.join(
-    __dirname,
-    "generated"
-  );
-
-// Make sure the directory exists.
-if (!fs.existsSync(generatedDirectory)) {
-  fs.mkdirSync(
-    generatedDirectory,
-    {
-      recursive: true,
-    }
-  );
-}
+await ensureGeneratedDirectory();
 
 console.log(
   "📁 Generated media directory:",
@@ -133,449 +125,90 @@ export const upload = multer({
 });
 
 // ===========================================
-// GENERATED MEDIA
-//
-// IMPORTANT:
-// We handle MP4 files ourselves so that
-// browsers can use HTTP Range requests.
-//
-// This allows:
-// - Video playback
-// - Seeking
-// - Scrubbing
-// - Partial downloads
-// - Browser streaming
+// GENERATED MEDIA WITH SECURE TOKEN ACCESS
 // ===========================================
 
 app.get(
-  "/generated/:filename",
+  "/generated/:token/:filename",
   async (req, res) => {
     try {
-      const filename =
-        path.basename(
-          req.params.filename
-        );
+      const token = String(req.params.token || "").trim();
+      const filename = path.basename(String(req.params.filename || ""));
 
-      const filePath =
-        path.join(
-          generatedDirectory,
-          filename
-        );
-
-      console.log(
-        "🎬 Generated media request:",
-        filename
-      );
-
-      // =========================================
-      // SECURITY
-      // =========================================
-
-      if (
-        !filename ||
-        filename.includes("..")
-      ) {
+      if (!token || !filename || filename.includes("..")) {
         return res.status(400).json({
           success: false,
-          error:
-            "Invalid media filename.",
+          error: "Invalid download token or filename.",
         });
       }
 
-      // =========================================
-      // FILE EXISTS?
-      // =========================================
+      const entry = getSecureDownloadEntry(token, filename);
 
-      let stat;
-
-      try {
-        stat =
-          await fs.promises.stat(
-            filePath
-          );
-      } catch {
-        console.error(
-          "❌ Generated media not found:",
-          filePath
-        );
-
-        return res.status(404).json({
+      if (!entry) {
+        return res.status(403).json({
           success: false,
-          error:
-            "Generated media not found.",
+          error: "This file link is invalid or expired.",
         });
       }
 
-      if (!stat.isFile()) {
-        return res.status(404).json({
-          success: false,
-          error:
-            "Generated media is not a file.",
-        });
-      }
+      let stream;
+      let contentType;
+      let contentLength;
 
-      const fileSize =
-        stat.size;
+      if (entry.provider === "local") {
+        const filePath = entry.filePath;
+        const stat = await fs.promises.stat(filePath);
 
-      // =========================================
-      // DETERMINE CONTENT TYPE
-      // =========================================
-
-      const extension =
-        path
-          .extname(filename)
-          .toLowerCase();
-
-      let contentType =
-        "application/octet-stream";
-
-      if (
-        extension === ".mp4"
-      ) {
-        contentType =
-          "video/mp4";
-      } else if (
-        extension === ".webm"
-      ) {
-        contentType =
-          "video/webm";
-      } else if (
-        extension === ".mov"
-      ) {
-        contentType =
-          "video/quicktime";
-      } else if (
-        extension === ".mp3"
-      ) {
-        contentType =
-          "audio/mpeg";
-      } else if (
-        extension === ".wav"
-      ) {
-        contentType =
-          "audio/wav";
-      } else if (
-        extension === ".pdf"
-      ) {
-        contentType =
-          "application/pdf";
-      } else if (
-        extension === ".png"
-      ) {
-        contentType =
-          "image/png";
-      } else if (
-        extension === ".jpg" ||
-        extension === ".jpeg"
-      ) {
-        contentType =
-          "image/jpeg";
-      }
-
-      // =========================================
-      // BASIC HEADERS
-      // =========================================
-
-      res.setHeader(
-        "Content-Type",
-        contentType
-      );
-
-      res.setHeader(
-        "Accept-Ranges",
-        "bytes"
-      );
-
-      res.setHeader(
-        "Cache-Control",
-        "public, max-age=3600"
-      );
-
-      res.setHeader(
-        "Access-Control-Allow-Origin",
-        "*"
-      );
-
-      res.setHeader(
-        "Access-Control-Expose-Headers",
-        "Content-Length, Content-Range, Accept-Ranges, Content-Type"
-      );
-
-      // =========================================
-      // RANGE REQUEST
-      // =========================================
-
-      const range =
-        req.headers.range;
-
-      /**
-       * No Range header.
-       *
-       * Send the complete file.
-       */
-
-      if (!range) {
-        console.log(
-          "📦 Sending complete media file:",
-          filename
-        );
-
-        res.setHeader(
-          "Content-Length",
-          fileSize
-        );
-
-        res.status(200);
-
-        const stream =
-          fs.createReadStream(
-            filePath
-          );
-
-        stream.on(
-          "error",
-          (error) => {
-            console.error(
-              "❌ Media stream error:",
-              error
-            );
-
-            if (
-              !res.headersSent
-            ) {
-              res.status(500).end();
-            } else {
-              res.destroy(
-                error
-              );
-            }
-          }
-        );
-
-        return stream.pipe(
-          res
-        );
-      }
-
-      // =========================================
-      // PARSE RANGE
-      // =========================================
-
-      console.log(
-        "📡 Range request:",
-        range
-      );
-
-      const rangeMatch =
-        range.match(
-          /bytes=(\d*)-(\d*)/
-        );
-
-      if (!rangeMatch) {
-        res.setHeader(
-          "Content-Range",
-          `bytes */${fileSize}`
-        );
-
-        return res.status(416).end();
-      }
-
-      const startString =
-        rangeMatch[1];
-
-      const endString =
-        rangeMatch[2];
-
-      let start =
-        startString
-          ? Number(startString)
-          : 0;
-
-      let end =
-        endString
-          ? Number(endString)
-          : fileSize - 1;
-
-      // =========================================
-      // HANDLE SUFFIX RANGE
-      //
-      // Example:
-      // bytes=-500000
-      // =========================================
-
-      if (
-        !startString &&
-        endString
-      ) {
-        const suffixLength =
-          Number(endString);
-
-        if (
-          !Number.isFinite(
-            suffixLength
-          ) ||
-          suffixLength <= 0
-        ) {
-          res.setHeader(
-            "Content-Range",
-            `bytes */${fileSize}`
-          );
-
-          return res
-            .status(416)
-            .end();
+        if (!stat.isFile()) {
+          return res.status(404).json({
+            success: false,
+            error: "Generated media is not a file.",
+          });
         }
 
-        start =
-          Math.max(
-            fileSize -
-              suffixLength,
-            0
-          );
-
-        end =
-          fileSize - 1;
+        stream = fs.createReadStream(filePath);
+        contentType = path.extname(filename).toLowerCase() === ".pdf"
+          ? "application/pdf"
+          : path.extname(filename).toLowerCase() === ".png"
+            ? "image/png"
+            : path.extname(filename).toLowerCase() === ".jpg" || path.extname(filename).toLowerCase() === ".jpeg"
+              ? "image/jpeg"
+              : path.extname(filename).toLowerCase() === ".mp4"
+                ? "video/mp4"
+                : "application/octet-stream";
+        contentLength = stat.size;
+      } else {
+        const r2Response = await readGeneratedFileStream(entry);
+        stream = r2Response.stream;
+        contentType = r2Response.contentType || "application/octet-stream";
+        contentLength = r2Response.size || 0;
       }
 
-      // =========================================
-      // VALIDATE RANGE
-      // =========================================
-
-      if (
-        !Number.isFinite(start) ||
-        !Number.isFinite(end) ||
-        start < 0 ||
-        end < start ||
-        start >= fileSize
-      ) {
-        console.error(
-          "❌ Invalid range:",
-          {
-            range,
-            start,
-            end,
-            fileSize,
-          }
-        );
-
-        res.setHeader(
-          "Content-Range",
-          `bytes */${fileSize}`
-        );
-
-        return res
-          .status(416)
-          .end();
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Cache-Control", "private, no-store");
+      if (contentLength > 0) {
+        res.setHeader("Content-Length", contentLength);
       }
 
-      // Never allow end beyond file.
-      end =
-        Math.min(
-          end,
-          fileSize - 1
-        );
-
-      const chunkSize =
-        end - start + 1;
-
-      // =========================================
-      // RANGE RESPONSE
-      // =========================================
-
-      console.log(
-        "📡 Sending video range:",
-        {
-          start,
-          end,
-          chunkSize,
-          fileSize,
+      stream.on("error", (error) => {
+        console.error("❌ Secure PDF stream error:", error);
+        if (!res.headersSent) {
+          res.status(500).end();
+        } else {
+          res.destroy(error);
         }
-      );
+      });
 
-      res.status(206);
-
-      res.setHeader(
-        "Content-Range",
-        `bytes ${start}-${end}/${fileSize}`
-      );
-
-      res.setHeader(
-        "Content-Length",
-        chunkSize
-      );
-
-      const stream =
-        fs.createReadStream(
-          filePath,
-          {
-            start,
-            end,
-          }
-        );
-
-      stream.on(
-        "error",
-        (error) => {
-          console.error(
-            "❌ Range stream error:",
-            error
-          );
-
-          if (
-            !res.headersSent
-          ) {
-            res.status(500).end();
-          } else {
-            res.destroy(
-              error
-            );
-          }
-        }
-      );
-
-      return stream.pipe(
-        res
-      );
-
+      return stream.pipe(res);
     } catch (error) {
-      console.error(
-        "❌ Generated media route error:",
-        error
-      );
-
-      if (
-        !res.headersSent
-      ) {
-        return res.status(500).json({
-          success: false,
-          error:
-            error instanceof Error
-              ? error.message
-              : "Unable to serve generated media.",
-        });
-      }
-
-      res.end();
+      console.error("❌ Secure generated file request failed:", error);
+      return res.status(500).json({
+        success: false,
+        error: "Unable to serve the requested generated file.",
+      });
     }
   }
-);
-
-// ===========================================
-// GENERATED MEDIA FALLBACK
-//
-// Keep Express static available for any
-// generated files that aren't handled above.
-// ===========================================
-
-app.use(
-  "/generated",
-  express.static(
-    generatedDirectory,
-    {
-      fallthrough: true,
-      index: false,
-    }
-  )
 );
 
 // ===========================================
@@ -835,37 +468,39 @@ app.use(
 );
 
 // ===========================================
-// START SERVER
+// START SERVER WHEN RUN DIRECTLY
 // ===========================================
 
 const PORT =
   process.env.PORT || 3001;
 
-app.listen(
-  PORT,
-  () => {
-    console.log(
-      "===================================="
-    );
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  app.listen(
+    PORT,
+    () => {
+      console.log(
+        "===================================="
+      );
 
-    console.log(
-      "🚀 Zuri Backend Started Successfully"
-    );
+      console.log(
+        "🚀 Zuri Backend Started Successfully"
+      );
 
-    console.log(
-      `🌍 Zuri Backend listening on port ${PORT}`
-    );
+      console.log(
+        `🌍 Zuri Backend listening on port ${PORT}`
+      );
 
-    console.log(
-      "📹 Video streaming: ENABLED"
-    );
+      console.log(
+        "📹 Video streaming: ENABLED"
+      );
 
-    console.log(
-      "📡 HTTP Range requests: ENABLED"
-    );
+      console.log(
+        "📡 HTTP Range requests: ENABLED"
+      );
 
-    console.log(
-      "===================================="
-    );
-  }
-);
+      console.log(
+        "===================================="
+      );
+    }
+  );
+}
