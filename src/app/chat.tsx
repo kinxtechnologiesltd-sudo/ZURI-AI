@@ -62,6 +62,12 @@ type Message = {
     title?: string | null;
     sourceUrl?: string | null;
   }>;
+  sources?: Array<{
+    title?: string | null;
+    url?: string | null;
+    content?: string | null;
+    publishedDate?: string | null;
+  }>;
 };
 
 function GenerationStatus({
@@ -1296,6 +1302,10 @@ const response = await fetch(
             )
               ? data.researchImages
               : [],
+          sources:
+            Array.isArray(data.sources)
+              ? data.sources
+              : [],
         },
       ]);
 
@@ -1309,6 +1319,9 @@ const response = await fetch(
             data.researchImages
           )
             ? data.researchImages
+            : [],
+          Array.isArray(data.sources)
+            ? data.sources
             : [],
           data.videoUrl || undefined,
           audioUrl || data.audioUrl || undefined,

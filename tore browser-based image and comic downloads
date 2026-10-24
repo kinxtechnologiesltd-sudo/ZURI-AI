@@ -1,0 +1,161 @@
+[1mdiff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml[m
+[1mindex 06bcc8af..ccfb33b9 100644[m
+[1m--- a/android/app/src/main/AndroidManifest.xml[m
+[1m+++ b/android/app/src/main/AndroidManifest.xml[m
+[36m@@ -1,15 +1,13 @@[m
+[31m-<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">[m
+[32m+[m[32m<manifest xmlns:android="http://schemas.android.com/apk/res/android">[m
+   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>[m
+   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>[m
+   <uses-permission android:name="android.permission.INTERNET"/>[m
+   <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>[m
+[31m-  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion"/>[m
+[31m-  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>[m
+[31m-  <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>[m
+[32m+[m[32m  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>[m
+   <uses-permission android:name="android.permission.RECORD_AUDIO"/>[m
+   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>[m
+   <uses-permission android:name="android.permission.VIBRATE"/>[m
+[31m-  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion"/>[m
+[32m+[m[32m  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>[m
+   <queries>[m
+     <intent>[m
+       <action android:name="android.intent.action.VIEW"/>[m
+[36m@@ -17,7 +15,7 @@[m
+       <data android:scheme="https"/>[m
+     </intent>[m
+   </queries>[m
+[31m-  <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:allowBackup="true" android:theme="@style/AppTheme" android:supportsRtl="true" android:enableOnBackInvokedCallback="false" android:fullBackupContent="@xml/secure_store_backup_rules" android:dataExtractionRules="@xml/secure_store_data_extraction_rules" android:requestLegacyExternalStorage="true">[m
+[32m+[m[32m  <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:allowBackup="true" android:theme="@style/AppTheme" android:supportsRtl="true" android:enableOnBackInvokedCallback="false" android:fullBackupContent="@xml/secure_store_backup_rules" android:dataExtractionRules="@xml/secure_store_data_extraction_rules">[m
+     <meta-data android:name="expo.modules.updates.ENABLED" android:value="false"/>[m
+     <meta-data android:name="expo.modules.updates.ENABLE_BSDIFF_PATCH_SUPPORT" android:value="true"/>[m
+     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>[m
+[1mdiff --git a/app.json b/app.json[m
+[1mindex 387d9e10..4fcc2c2f 100644[m
+[1m--- a/app.json[m
+[1m+++ b/app.json[m
+[36m@@ -41,14 +41,6 @@[m
+           "microphonePermission": "Allow Zuri to access your microphone for voice conversations."[m
+         }[m
+       ],[m
+[31m-      [[m
+[31m-        "expo-media-library",[m
+[31m-        {[m
+[31m-          "photosPermission": "Allow Zuri to save generated images to your gallery.",[m
+[31m-          "savePhotosPermission": "Allow Zuri to save generated images to your gallery.",[m
+[31m-          "granularPermissions": ["photo"][m
+[31m-        }[m
+[31m-      ],[m
+       "expo-secure-store",[m
+       "expo-image",[m
+       "expo-status-bar",[m
+[1mdiff --git a/package-lock.json b/package-lock.json[m
+[1mindex 5366851e..b51772d3 100644[m
+[1m--- a/package-lock.json[m
+[1m+++ b/package-lock.json[m
+[36m@@ -30,7 +30,6 @@[m
+         "expo-glass-effect": "~57.0.3",[m
+         "expo-image": "~57.0.5",[m
+         "expo-linking": "~57.0.10",[m
+[31m-        "expo-media-library": "~57.0.5",[m
+         "expo-router": "~57.0.21",[m
+         "expo-secure-store": "~57.0.4",[m
+         "expo-splash-screen": "~57.0.9",[m
+[36m@@ -9554,16 +9553,6 @@[m
+         "react-native": "*"[m
+       }[m
+     },[m
+[31m-    "node_modules/expo-media-library": {[m
+[31m-      "version": "57.0.5",[m
+[31m-      "resolved": "https://registry.npmjs.org/expo-media-library/-/expo-media-library-57.0.5.tgz",[m
+[31m-      "integrity": "sha512-amSLrLsS7Gl4nCqbc2PlVbHj5jK9kQLsSOQgJ2QasHCSHzYXw6Ui7aolxX5APg9P4TgYPE0yWn46ndifh52bRw==",[m
+[31m-      "license": "MIT",[m
+[31m-      "peerDependencies": {[m
+[31m-        "expo": "*",[m
+[31m-        "react-native": "*"[m
+[31m-      }[m
+[31m-    },[m
+     "node_modules/expo-module-scripts": {[m
+       "version": "56.0.3",[m
+       "resolved": "https://registry.npmjs.org/expo-module-scripts/-/expo-module-scripts-56.0.3.tgz",[m
+[1mdiff --git a/package.json b/package.json[m
+[1mindex bc070b3c..67429140 100644[m
+[1m--- a/package.json[m
+[1m+++ b/package.json[m
+[36m@@ -25,7 +25,6 @@[m
+     "expo-glass-effect": "~57.0.3",[m
+     "expo-image": "~57.0.5",[m
+     "expo-linking": "~57.0.10",[m
+[31m-    "expo-media-library": "~57.0.5",[m
+     "expo-router": "~57.0.21",[m
+     "expo-secure-store": "~57.0.4",[m
+     "expo-splash-screen": "~57.0.9",[m
+[1mdiff --git a/src/components/chat/generatedImageDownload.native.ts b/src/components/chat/generatedImageDownload.native.ts[m
+[1mindex 0de804db..3584fb2c 100644[m
+[1m--- a/src/components/chat/generatedImageDownload.native.ts[m
+[1m+++ b/src/components/chat/generatedImageDownload.native.ts[m
+[36m@@ -1,73 +1,5 @@[m
+[31m-import { Alert } from "react-native";[m
+[31m-import { File, Paths } from "expo-file-system";[m
+[31m-import * as MediaLibrary from "expo-media-library";[m
+[32m+[m[32mimport { Linking } from "react-native";[m
+ [m
+[31m-export async function saveGeneratedImage(imageUrl: string) {[m
+[31m-  let temporaryFile: File | null = null;[m
+[31m-[m
+[31m-  try {[m
+[31m-    const currentPermission = await MediaLibrary.getPermissionsAsync([m
+[31m-      true,[m
+[31m-      ["photo"][m
+[31m-    );[m
+[31m-    const permission = currentPermission.granted[m
+[31m-      ? currentPermission[m
+[31m-      : await MediaLibrary.requestPermissionsAsync(true, ["photo"]);[m
+[31m-[m
+[31m-    if (!permission.granted) {[m
+[31m-      Alert.alert([m
+[31m-        "Permission Required",[m
+[31m-        "Zuri needs permission to save images to your gallery."[m
+[31m-      );[m
+[31m-      return;[m
+[31m-    }[m
+[31m-[m
+[31m-    const response = await fetch(imageUrl);[m
+[31m-    if (!response.ok) {[m
+[31m-      throw new Error(`Image download failed (${response.status}).`);[m
+[31m-    }[m
+[31m-[m
+[31m-    const contentType = response.headers[m
+[31m-      .get("content-type")[m
+[31m-      ?.split(";")[0][m
+[31m-      .trim()[m
+[31m-      .toLowerCase();[m
+[31m-    const urlExtension = imageUrl[m
+[31m-      .split(/[?#]/)[0][m
+[31m-      .match(/\.(png|jpe?g|webp|gif)$/i)?.[1][m
+[31m-      ?.toLowerCase();[m
+[31m-    const imageExtension = contentType === "image/png"[m
+[31m-      ? "png"[m
+[31m-      : contentType === "image/webp"[m
+[31m-        ? "webp"[m
+[31m-        : contentType === "image/gif"[m
+[31m-          ? "gif"[m
+[31m-          : contentType === "image/jpeg" || urlExtension === "jpg" || urlExtension === "jpeg"[m
+[31m-            ? "jpg"[m
+[31m-            : urlExtension || "jpg";[m
+[31m-[m
+[31m-    temporaryFile = new File([m
+[31m-      Paths.cache,[m
+[31m-      `zuri-image-${Date.now()}.${imageExtension}`[m
+[31m-    );[m
+[31m-    temporaryFile.write([m
+[31m-      new Uint8Array(await response.arrayBuffer())[m
+[31m-    );[m
+[31m-    await MediaLibrary.Asset.create(temporaryFile.uri);[m
+[31m-[m
+[31m-    Alert.alert([m
+[31m-      "Image Saved",[m
+[31m-      "Your image has been saved to your gallery."[m
+[31m-    );[m
+[31m-  } catch (error) {[m
+[31m-    console.er

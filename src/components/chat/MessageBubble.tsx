@@ -19,6 +19,13 @@ type ResearchImage = {
   sourceUrl?: string | null;
 };
 
+type SourceLink = {
+  title?: string | null;
+  url?: string | null;
+  content?: string | null;
+  publishedDate?: string | null;
+};
+
 type MessageBubbleProps = {
   sender: "user" | "ai";
   text: string;
@@ -31,6 +38,7 @@ type MessageBubbleProps = {
   pdfName?: string;
 
   researchImages?: ResearchImage[];
+  sources?: SourceLink[];
 };
 
 type MarkdownPart = {
@@ -559,6 +567,7 @@ export default function MessageBubble({
   pdfUrl,
   pdfName,
   researchImages = [],
+  sources = [],
 }: MessageBubbleProps) {
   const isUser = sender === "user";
 const [copied, setCopied] = useState(false);
@@ -712,7 +721,7 @@ const handleCopy = async () => {
         )}
 
         {!isUser &&
-          researchImages.length > 0 && (
+          (sources.length > 0 || researchImages.length > 0) && (
             <View style={styles.researchGallery}>
               <View style={styles.researchHeader}>
                 <View
@@ -738,96 +747,130 @@ const handleCopy = async () => {
                     styles.researchCount
                   }
                 >
-                  {researchImages.length}
+                  {Math.max(
+                    sources.length,
+                    researchImages.length
+                  )}
                 </Text>
               </View>
 
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={
-                  false
-                }
-                contentContainerStyle={
-                  styles.researchScrollContent
-                }
-              >
-                {researchImages.map(
-                  (item, index) => (
-                    <View
-                      key={`${item.url}-${index}`}
-                      style={styles.researchCard}
+              {sources.length > 0 && (
+                <View style={styles.sourcesList}>
+                  {sources.map((source, index) => (
+                    <TouchableOpacity
+                      key={`${source.url || index}-source`}
+                      style={styles.sourceRow}
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        if (source.url) {
+                          void Linking.openURL(source.url);
+                        }
+                      }}
                     >
-                      <TouchableOpacity
-                        activeOpacity={0.85}
-                        onPress={() => {
-                          if (item.url) {
-                            void Linking.openURL(
-                              item.url
-                            );
-                          }
-                        }}
-                      >
-                        <Image
-                          source={{
-                            uri: item.url,
-                          }}
-                          style={
-                            styles.researchImage
-                          }
-                          resizeMode="cover"
-                        />
-
-                        <View
-                          style={
-                            styles.imageOverlay
-                          }
-                        >
-                          <Text
-                            style={
-                              styles.imageOpenText
-                            }
-                          >
-                            View ↗
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-
-                      {!!item.title && (
-                        <Text
-                          style={
-                            styles.researchTitle
-                          }
-                          numberOfLines={2}
-                        >
-                          {item.title}
+                      <Text style={styles.sourceIndex}>[{index + 1}]</Text>
+                      <View style={styles.sourceTextWrap}>
+                        <Text style={styles.sourceTitle} numberOfLines={2}>
+                          {source.title || source.url || `Source ${index + 1}`}
                         </Text>
-                      )}
+                        {!!source.content && (
+                          <Text style={styles.sourceExcerpt} numberOfLines={2}>
+                            {source.content}
+                          </Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
 
-                      {!!item.sourceUrl && (
+              {researchImages.length > 0 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={
+                    false
+                  }
+                  contentContainerStyle={
+                    styles.researchScrollContent
+                  }
+                >
+                  {researchImages.map(
+                    (item, index) => (
+                      <View
+                        key={`${item.url}-${index}`}
+                        style={styles.researchCard}
+                      >
                         <TouchableOpacity
-                          style={
-                            styles.sourceButton
-                          }
-                          activeOpacity={0.75}
+                          activeOpacity={0.85}
                           onPress={() => {
-                            void Linking.openURL(
-                              item.sourceUrl!
-                            );
+                            if (item.url) {
+                              void Linking.openURL(
+                                item.url
+                              );
+                            }
                           }}
                         >
-                          <Text
+                          <Image
+                            source={{
+                              uri: item.url,
+                            }}
                             style={
-                              styles.sourceButtonText
+                              styles.researchImage
+                            }
+                            resizeMode="cover"
+                          />
+
+                          <View
+                            style={
+                              styles.imageOverlay
                             }
                           >
-                            View source ↗
-                          </Text>
+                            <Text
+                              style={
+                                styles.imageOpenText
+                              }
+                            >
+                              View ↗
+                            </Text>
+                          </View>
                         </TouchableOpacity>
-                      )}
-                    </View>
-                  )
-                )}
-              </ScrollView>
+
+                        {!!item.title && (
+                          <Text
+                            style={
+                              styles.researchTitle
+                            }
+                            numberOfLines={2}
+                          >
+                            {item.title}
+                          </Text>
+                        )}
+
+                        {!!item.sourceUrl && (
+                          <TouchableOpacity
+                            style={
+                              styles.sourceButton
+                            }
+                            activeOpacity={0.75}
+                            onPress={() => {
+                              void Linking.openURL(
+                                item.sourceUrl!
+                              );
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.sourceButtonText
+                              }
+                            >
+                              View source ↗
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )
+                  )}
+                </ScrollView>
+              )}
             </View>
           )}
 

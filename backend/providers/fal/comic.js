@@ -1,10 +1,11 @@
 import { fal } from "@fal-ai/client";
 import dotenv from "dotenv";
+import { ENV } from "../../config/environment.js";
 
 dotenv.config();
 
 const FAL_MODEL =
-  "fal-ai/flux-2-lora-gallery/digital-comic-art";
+  ENV.FAL_COMIC_MODEL || "fal-ai/flux-2-lora-gallery/digital-comic-art";
 
 const IMAGE_SIZE_BY_ASPECT_RATIO = {
   "4:3": "landscape_4_3",
@@ -16,7 +17,7 @@ const IMAGE_SIZE_BY_ASPECT_RATIO = {
 fal.config({
   credentials: () => {
     const key = String(
-      process.env.FAL_KEY || ""
+      ENV.FAL_KEY || ""
     ).trim();
 
     if (!key) {
@@ -65,7 +66,7 @@ export async function generateFalComic({
 
     console.log(
       "🎨 FAL KEY:",
-      process.env.FAL_KEY
+      ENV.FAL_KEY
         ? "LOADED"
         : "MISSING"
     );

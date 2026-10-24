@@ -1,19 +1,21 @@
 import { fal } from "@fal-ai/client";
 import dotenv from "dotenv";
 import sharp from "sharp";
+import { ENV } from "../config/environment.js";
 import { addZuriWatermark } from "../services/imageWatermark.js";
 
 dotenv.config();
 
-const FAL_MODEL = "fal-ai/flux/schnell";
+const FAL_MODEL =
+  ENV.FAL_MODEL || "fal-ai/flux/schnell";
 
 function getFalClient() {
-  if (!process.env.FAL_KEY) {
-    throw new Error("FAL_KEY is missing.");
+  if (!ENV.FAL_KEY) {
+    throw new Error("FAL_KEY is missing from environment variables.");
   }
 
   fal.config({
-    credentials: process.env.FAL_KEY,
+    credentials: ENV.FAL_KEY,
   });
 
   return fal;

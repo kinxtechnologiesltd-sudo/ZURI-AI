@@ -894,6 +894,11 @@ return res.json({
     Array.isArray(response?.researchImages)
       ? response.researchImages
       : [],
+
+  sources:
+    Array.isArray(response?.sources)
+      ? response.sources
+      : [],
 });
 
     } catch (error) {

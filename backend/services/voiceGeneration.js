@@ -1,11 +1,22 @@
 import dotenv from "dotenv";
 import OpenAI from "openai";
+import { ENV } from "../config/environment.js";
 
 dotenv.config();
 
+if (!ENV.OPENAI_API_KEY) {
+  throw new Error("OPENAI_API_KEY is missing from environment variables.");
+}
+
 const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: ENV.OPENAI_API_KEY,
 });
+
+const VIDEO_DIALOGUE_MODEL =
+  ENV.OPENAI_MODEL || "gpt-4.1";
+
+const TTS_MODEL =
+  ENV.OPENAI_TTS_MODEL || "gpt-4o-mini-tts";
 
 /**
  * Generate actual spoken audio for Zuri talking videos.
@@ -36,7 +47,7 @@ export async function generateSpeechForVideo({
      */
     const scriptResponse =
       await client.responses.create({
-        model: "gpt-5.6",
+        model: VIDEO_DIALOGUE_MODEL,
         input: [
           {
             role: "system",
@@ -86,7 +97,7 @@ Rules:
 
     const speech =
       await client.audio.speech.create({
-        model: "gpt-4o-mini-tts",
+        model: TTS_MODEL,
         voice,
         input: script,
         response_format: "mp3",

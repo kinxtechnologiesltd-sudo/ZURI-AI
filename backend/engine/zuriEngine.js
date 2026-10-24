@@ -718,6 +718,8 @@ async function prepareContext({
   let researchImages =
     [];
 
+  let researchSources = [];
+
   /**
    * ==========================================
    * EXECUTE TOOLS
@@ -862,13 +864,22 @@ async function prepareContext({
 
         if (
           step.type ===
-            "research" &&
-          parsed?.images
+            "research"
         ) {
-          researchImages =
-            normalizeResearchImages(
-              parsed.images
-            );
+          if (Array.isArray(parsed?.images)) {
+            researchImages =
+              normalizeResearchImages(
+                parsed.images
+              );
+          }
+
+          if (Array.isArray(parsed?.sources)) {
+            researchSources =
+              parsed.sources.filter(
+                (source) =>
+                  source?.url
+              );
+          }
         }
 
         if (
@@ -1044,6 +1055,10 @@ when useful. Do not use unnecessary separator lines.
 
     researchImages:
       researchImages ||
+      [],
+
+    sources:
+      researchSources ||
       [],
 
     imageUrl:
@@ -1311,6 +1326,9 @@ export async function runZuri({
 
       researchImages:
         context.researchImages,
+
+      sources:
+        context.sources || [],
     };
   }
 
@@ -1346,6 +1364,9 @@ export async function runZuri({
 
     researchImages:
       context.researchImages,
+
+    sources:
+      context.sources || [],
   };
 
   console.log(
@@ -1437,6 +1458,9 @@ export async function runZuriStream({
 
       researchImages:
         context.researchImages,
+
+      sources:
+        context.sources || [],
 
       musicTaskId:
         null,

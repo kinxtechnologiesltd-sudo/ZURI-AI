@@ -8,6 +8,11 @@ const DEFAULT_VOICE =
 export async function generateSpeech(
   text
 ) {
+  if (!ENV.ELEVENLABS_API_KEY) {
+    throw new Error(
+      "ELEVENLABS_API_KEY is missing from environment variables."
+    );
+  }
 
   const response =
     await fetch(
@@ -26,10 +31,8 @@ export async function generateSpeech(
         },
 
         body: JSON.stringify({
-
           text,
-
-        model_id: "eleven_v3"
+          model_id: ENV.ELEVENLABS_MODEL_ID || "eleven_v3",
         }),
 
       }

@@ -2,6 +2,9 @@ import { randomUUID } from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "../../config/firebase.js";
 
+const DEFAULT_CONVERSATION_MODEL =
+  process.env.OPENAI_MODEL || "gpt-4.1";
+
 /**
  * Create a new conversation
  */
@@ -15,7 +18,7 @@ export async function createConversation(userId, title = "New Chat") {
       pinned: false,
       archived: false,
       deleted: false,
-      model: "gpt-5.5",
+      model: DEFAULT_CONVERSATION_MODEL,
       messageCount: 0,
       lastMessage: "",
       createdAt: FieldValue.serverTimestamp(),

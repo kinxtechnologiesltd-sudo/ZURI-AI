@@ -15,8 +15,23 @@ export const ENV = {
   GROQ_API_KEY:
     process.env.GROQ_API_KEY,
 
+  GROQ_TRANSCRIPTION_MODEL:
+    process.env.GROQ_TRANSCRIPTION_MODEL || "whisper-large-v3",
+
   OPENAI_API_KEY:
     process.env.OPENAI_API_KEY,
+
+  OPENAI_MODEL:
+    process.env.OPENAI_MODEL || "gpt-4.1",
+
+  OPENAI_FAST_MODEL:
+    process.env.OPENAI_FAST_MODEL || "gpt-4.1-mini",
+
+  OPENAI_IMAGE_MODEL:
+    process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
+
+  OPENAI_TTS_MODEL:
+    process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts",
 
   STABILITY_API_KEY:
     process.env.STABILITY_API_KEY,
@@ -31,6 +46,12 @@ export const ENV = {
   FAL_KEY:
     process.env.FAL_KEY,
 
+  FAL_MODEL:
+    process.env.FAL_MODEL || "fal-ai/flux/schnell",
+
+  FAL_COMIC_MODEL:
+    process.env.FAL_COMIC_MODEL || "fal-ai/flux-2-lora-gallery/digital-comic-art",
+
   PIKA_API_KEY:
     process.env.PIKA_API_KEY,
 
@@ -38,15 +59,18 @@ export const ENV = {
     process.env.HAILUO_API_KEY,
 
   // Music
- SUNO_API_KEY:
-  process.env.SUNO_API_KEY,
+  SUNO_API_KEY:
+    process.env.SUNO_API_KEY,
 
-SUNO_CALLBACK_URL:
-  process.env.SUNO_CALLBACK_URL,
+  SUNO_CALLBACK_URL:
+    process.env.SUNO_CALLBACK_URL,
 
   // Other Services
   ELEVENLABS_API_KEY:
     process.env.ELEVENLABS_API_KEY,
+
+  ELEVENLABS_MODEL_ID:
+    process.env.ELEVENLABS_MODEL_ID || "eleven_v3",
 
   TAVILY_API_KEY:
     process.env.TAVILY_API_KEY,

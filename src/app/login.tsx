@@ -1,14 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import * as Google from "expo-auth-session/providers/google";
-import { makeRedirectUri } from "expo-auth-session";
 import { router } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
-import { useEffect, useState } from "react";
-
-import {
-  GoogleAuthProvider,
-  signInWithCredential,
-} from "firebase/auth";
+import { useState } from "react";
 
 import {
   ActivityIndicator,
@@ -25,151 +17,13 @@ import {
 } from "react-native";
 
 import ZuriLogo from "../asset/images/zuri-icon.png (2).png";
-import {
-  loginUser,
-  saveGoogleUser,
-} from "../firebase/auth";
-import { auth } from "../firebase/firebaseConfig";
-
-WebBrowser.maybeCompleteAuthSession();
+import { loginUser } from "../firebase/auth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  // ==========================
-  // GOOGLE AUTH CONFIGURATION
-  // ==========================
-
-  const redirectUri = makeRedirectUri({
-    scheme: "zuri",
-    path: "oauthredirect",
-    native: "zuri:/oauthredirect",
-  });
-
-  const [request, response, promptAsync] =
-    Google.useAuthRequest({
-      androidClientId:
-        "261432661731-cee49iqni6a4v9mfst7dt9n8jc09hb67.apps.googleusercontent.com",
-
-      iosClientId:
-        "261432661731-3k5ad10b3ea9rk88dsq1hr6oi0ta3p6b.apps.googleusercontent.com",
-
-      webClientId:
-        "261432661731-gm32ncu7rvrtal301v33mgqmmdb1b0pg.apps.googleusercontent.com",
-
-      redirectUri,
-
-      scopes: ["openid", "profile", "email"],
-
-      selectAccount: true,
-    });
-
-  // ==========================
-  // REDIRECT URI DEBUGGING
-  // ==========================
-
-  useEffect(() => {
-    console.log("=================================");
-    console.log("ZURI REDIRECT URI:", redirectUri);
-    console.log(
-      "REQUEST REDIRECT URI:",
-      request?.redirectUri
-    );
-    console.log("=================================");
-  }, [request, redirectUri]);
-
-  // ==========================
-  // GOOGLE RESPONSE
-  // ==========================
-
-  useEffect(() => {
-    const signInWithGoogle = async () => {
-      if (!response) return;
-
-      if (response.type === "error") {
-        console.log(
-          "GOOGLE OAUTH ERROR:",
-          response.params
-        );
-
-        Alert.alert(
-          "Google Login Failed",
-          response.params?.error_description ??
-            "Google authentication was unsuccessful."
-        );
-
-        return;
-      }
-
-      if (response.type !== "success") return;
-
-      try {
-        setLoading(true);
-
-        const accessToken =
-          response.authentication?.accessToken;
-
-        if (!accessToken) {
-          throw new Error(
-            "No Google access token received."
-          );
-        }
-
-        const credential =
-          GoogleAuthProvider.credential(
-            null,
-            accessToken
-          );
-
-        const userCredential =
-          await signInWithCredential(
-            auth,
-            credential
-          );
-
-        await saveGoogleUser(
-          userCredential.user
-        );
-
-        console.log(
-          "GOOGLE USER SIGNED IN:",
-          userCredential.user.email
-        );
-
-        router.replace("/home");
-      } catch (error: any) {
-        console.log(
-          "GOOGLE SIGN-IN ERROR:",
-          error
-        );
-
-        let message =
-          "Unable to sign in with Google.";
-
-        if (
-          error?.code ===
-          "auth/network-request-failed"
-        ) {
-          message =
-            "Firebase could not connect. Check your internet connection, VPN, firewall, or network settings.";
-        } else if (error?.message) {
-          message = error.message;
-        }
-
-        Alert.alert(
-          "Google Login Failed",
-          message
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    signInWithGoogle();
-  }, [response]);
 
   // ==========================
   // EMAIL LOGIN
@@ -237,31 +91,6 @@ export default function Login() {
       );
     } finally {
       setLoading(false);
-    }
-  };
-
-  // ==========================
-  // GOOGLE LOGIN
-  // ==========================
-
-  const handleGoogleSignIn = async () => {
-    if (loading || !request) return;
-
-    try {
-      await promptAsync({
-        showInRecents: true,
-      });
-    } catch (error: any) {
-      console.log(
-        "GOOGLE PROMPT ERROR:",
-        error
-      );
-
-      Alert.alert(
-        "Google Sign-In Failed",
-        error?.message ??
-          "Unable to sign in with Google."
-      );
     }
   };
 
@@ -411,35 +240,6 @@ export default function Login() {
                 Sign In
               </Text>
             )}
-          </TouchableOpacity>
-
-          {/* DIVIDER */}
-
-          <View style={styles.dividerRow}>
-            <View style={styles.divider} />
-
-            <Text style={styles.orText}>
-              OR
-            </Text>
-
-            <View style={styles.divider} />
-          </View>
-
-          {/* GOOGLE */}
-
-          <TouchableOpacity
-            style={styles.googleButton}
-            onPress={handleGoogleSignIn}
-            disabled={!request || loading}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.googleG}>
-              G
-            </Text>
-
-            <Text style={styles.googleText}>
-              Continue with Google
-            </Text>
           </TouchableOpacity>
 
           {/* SIGN UP */}
@@ -599,51 +399,6 @@ const styles = StyleSheet.create({
     color: "#081216",
     fontSize: 16,
     fontWeight: "800",
-  },
-
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 25,
-  },
-
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#263B40",
-  },
-
-  orText: {
-    color: "#718589",
-    fontSize: 11,
-    fontWeight: "700",
-    marginHorizontal: 14,
-    letterSpacing: 1,
-  },
-
-  googleButton: {
-    height: 56,
-    width: "100%",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#263B40",
-    backgroundColor: "#101F24",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  googleG: {
-    color: "#4285F4",
-    fontSize: 20,
-    fontWeight: "900",
-    marginRight: 10,
-  },
-
-  googleText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "700",
   },
 
   signupRow: {

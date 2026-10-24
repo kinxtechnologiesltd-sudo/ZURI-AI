@@ -1,5 +1,6 @@
 import express from "express";
 import multer from "multer";
+import { ENV } from "../config/environment.js";
 
 const router = express.Router();
 
@@ -47,17 +48,24 @@ router.post(
         audio.originalname || "audio.webm"
       );
 
-  formData.append(
-  "model",
-  "whisper-large-v3"
-);
+      formData.append(
+        "model",
+        ENV.GROQ_TRANSCRIPTION_MODEL || "whisper-large-v3"
+      );
+
+      if (!ENV.GROQ_API_KEY) {
+        return res.status(500).json({
+          success: false,
+          message: "GROQ_API_KEY is missing from environment variables.",
+        });
+      }
 
       const response = await fetch(
         "https://api.groq.com/openai/v1/audio/transcriptions",
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+            Authorization: `Bearer ${ENV.GROQ_API_KEY}`,
           },
           body: formData,
         }
@@ -170,8 +178,7 @@ const languageCode =
           },
           body: JSON.stringify({
             text,
-          model_id:
-  "eleven_v3",
+            model_id: ENV.ELEVENLABS_MODEL_ID || "eleven_v3",
             voice_settings: {
               stability: 0.55,
               similarity_boost: 0.8,

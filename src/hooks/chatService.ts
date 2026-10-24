@@ -14,6 +14,13 @@ export type ResearchImage = {
   sourceUrl?: string | null;
 };
 
+export type ResearchSource = {
+  title?: string | null;
+  url?: string | null;
+  content?: string | null;
+  publishedDate?: string | null;
+};
+
 /**
  * =====================================================
  * CHAT MESSAGE
@@ -38,6 +45,8 @@ export type ChatMessage = {
   pdfName?: string;
 
   researchImages: ResearchImage[];
+
+  sources?: ResearchSource[];
 
   createdAt?: unknown;
 };
@@ -84,6 +93,8 @@ type LoadMessagesResponse = {
 
     researchImages?: ResearchImage[];
 
+    sources?: ResearchSource[];
+
     createdAt?: unknown;
   }>;
 
@@ -119,6 +130,8 @@ export const saveMessage = async (
   imageUrl?: string,
 
   researchImages?: ResearchImage[],
+
+  sources?: ResearchSource[],
 
   videoUrl?: string,
 
@@ -228,6 +241,11 @@ export const saveMessage = async (
                   ? researchImages
                   : [],
 
+              sources:
+                Array.isArray(sources)
+                  ? sources
+                  : [],
+
               /**
                * ======================================
                * OPTIONS
@@ -254,6 +272,11 @@ export const saveMessage = async (
                     researchImages
                   )
                     ? researchImages
+                    : [],
+
+                sources:
+                  Array.isArray(sources)
+                    ? sources
                     : [],
               },
             }),
@@ -516,6 +539,11 @@ export const loadMessages = async (
             message.researchImages
           )
             ? message.researchImages
+            : [],
+
+        sources:
+          Array.isArray(message.sources)
+            ? message.sources
             : [],
 
         /**

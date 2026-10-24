@@ -7,7 +7,11 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const DEFAULT_MODEL = "gpt-5.6-sol";
+const DEFAULT_MODEL =
+  process.env.OPENAI_MODEL || "gpt-4.1";
+
+const FAST_MODEL =
+  process.env.OPENAI_FAST_MODEL || "gpt-4.1-mini";
 
 function normalizeResponse(response, model) {
   const text = response.output_text || "";
@@ -38,26 +42,36 @@ export async function chatWithOpenAI(
   model = DEFAULT_MODEL,
   options = {}
 ) {
+  const start = Date.now();
+
   try {
+    const chosenModel =
+      model || DEFAULT_MODEL;
+
     console.log(
       "🤖 Primary provider: OpenAI"
     );
 
     console.log(
       "🧠 OpenAI model:",
-      model
+      chosenModel
     );
 
     const response = await client.responses.create({
-      model,
+      model: chosenModel,
       input: messages,
       max_output_tokens:
         options.maxTokens ?? 4000,
     });
 
+    console.log(
+      "⏱️ OpenAI chat latency:",
+      `${Date.now() - start}ms`
+    );
+
     return normalizeResponse(
       response,
-      model
+      chosenModel
     );
   } catch (error) {
     console.error("OpenAI Error:", error);
@@ -74,14 +88,24 @@ export async function streamWithOpenAI(
   model = DEFAULT_MODEL,
   options = {}
 ) {
+  const start = Date.now();
+
   try {
+    const chosenModel =
+      model || DEFAULT_MODEL;
+
     const response = await client.responses.create({
-      model,
+      model: chosenModel,
       input: messages,
       stream: true,
       max_output_tokens:
         options.maxTokens ?? 4000,
     });
+
+    console.log(
+      "⏱️ OpenAI stream connected in:",
+      `${Date.now() - start}ms`
+    );
 
     return response;
   } catch (error) {

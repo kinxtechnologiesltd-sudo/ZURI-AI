@@ -23,6 +23,9 @@ export async function saveMessage(
       researchImages: Array.isArray(options.researchImages)
         ? options.researchImages
         : [],
+      sources: Array.isArray(options.sources)
+        ? options.sources
+        : [],
       files: options.files || [],
       voice: options.voice || null,
       metadata: options.metadata || {},
