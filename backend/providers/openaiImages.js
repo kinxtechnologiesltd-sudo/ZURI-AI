@@ -119,3 +119,55 @@ export async function generateOpenAIImage({
     throw error;
   }
 }
+export async function editOpenAIImage({
+  imageBuffer,
+  mimeType = "image/png",
+  prompt,
+  size = "1024x1024",
+}) {
+  if (!imageBuffer || !Buffer.isBuffer(imageBuffer)) {
+    throw new Error("A valid image buffer is required.");
+  }
+
+  if (!prompt?.trim()) {
+    throw new Error("An edit prompt is required.");
+  }
+
+  const IMAGE_MODEL =
+    process.env.OPENAI_IMAGE_EDIT_MODEL || "gpt-image-1";
+
+  const imageFile = await OpenAI.toFile(
+    imageBuffer,
+    "input.png",
+    { type: mimeType }
+  );
+
+  try {
+    const response = await getClient().images.edit({
+      model: IMAGE_MODEL,
+      image: imageFile,
+      prompt: prompt.trim(),
+      size,
+    });
+
+    const base64 = response.data?.[0]?.b64_json;
+
+    if (!base64) {
+      throw new Error("OpenAI returned no edited image.");
+    }
+
+    const buffer = Buffer.from(base64, "base64");
+
+    return {
+      success: true,
+      provider: "openai",
+      model: IMAGE_MODEL,
+      mimeType: "image/png",
+      buffer,
+      imageUrl: `data:image/png;base64,${base64}`,
+    };
+  } catch (error) {
+    console.error("OPENAI IMAGE EDIT ERROR:", error);
+    throw error;
+  }
+}

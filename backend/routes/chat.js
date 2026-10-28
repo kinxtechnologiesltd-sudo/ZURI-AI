@@ -17,6 +17,7 @@ import {
   editUploadedImage,
   validateUploadedImage,
 } from "../services/imageEditing.js";
+import { editOpenAIImage } from "../providers/openaiImages.js";
 import { getMusicStatus } from "../services/musicGeneration.js";
 import { extractPdfText } from "../services/pdf.js";
 import { generatePdf } from "../services/pdfGeneration.js";
@@ -793,16 +794,43 @@ Return ONLY the document content.
         : null;
 
       if (imageEditRequest?.type === "unsupported") {
-        response = {
-          choices: [
-            {
-              message: {
-                content:
-                  "I can currently resize an image to explicit dimensions (up to 4096 × 4096) or crop it to a square. Other edits, including background removal and retouching, are not available yet.",
+        try {
+          const editedResult = await editOpenAIImage({
+            imageBuffer: file.buffer,
+            mimeType: file.mimetype,
+            prompt: message,
+          });
+
+          const editedFile = await createEditedImage(
+            editedResult.buffer,
+            "image/png"
+          );
+
+          response = {
+            choices: [
+              {
+                message: {
+                  content:
+                    "I edited the image based on your request.",
+                },
               },
-            },
-          ],
-        };
+            ],
+            imageUrl: `${req.protocol}://${req.get("host")}${editedFile.url}`,
+          };
+        } catch (error) {
+          response = {
+            choices: [
+              {
+                message: {
+                  content:
+                    error instanceof Error
+                      ? error.message
+                      : "This image edit is not available.",
+                },
+              },
+            ],
+          };
+        }
       } else if (imageEditRequest) {
         const editedBuffer = await editUploadedImage(
           file.buffer,
