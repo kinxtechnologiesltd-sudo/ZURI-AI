@@ -134,7 +134,7 @@ export async function editOpenAIImage({
   }
 
   const IMAGE_MODEL =
-    process.env.OPENAI_IMAGE_EDIT_MODEL || "gpt-image-1";
+    process.env.OPENAI_IMAGE_EDIT_MODEL || "gpt-image-2.5-sunburst";
 
   const imageFile = await OpenAI.toFile(
     imageBuffer,
