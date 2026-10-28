@@ -83,6 +83,18 @@ export async function runProvider({
           options
         );
       } catch (error) {
+        const hasMultimodalContent = (messages || []).some((message) => {
+          return (
+            typeof message?.content !== "string" &&
+            message?.content !== null &&
+            message?.content !== undefined
+          );
+        });
+
+        if (hasMultimodalContent) {
+          throw error;
+        }
+
         console.warn(
           "⚠️ OpenAI failed — falling back to Groq"
         );
@@ -146,6 +158,18 @@ export async function streamProvider({
           options
         );
       } catch (error) {
+        const hasMultimodalContent = (messages || []).some((message) => {
+          return (
+            typeof message?.content !== "string" &&
+            message?.content !== null &&
+            message?.content !== undefined
+          );
+        });
+
+        if (hasMultimodalContent) {
+          throw error;
+        }
+
         console.warn(
           "⚠️ OpenAI failed — falling back to Groq"
         );

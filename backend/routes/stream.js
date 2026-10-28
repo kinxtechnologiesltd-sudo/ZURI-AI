@@ -65,7 +65,7 @@ router.post(
 
             content: [
               {
-                type: "text",
+                type: "input_text",
 
                 text:
                   message ||
@@ -73,11 +73,9 @@ router.post(
               },
 
               {
-                type: "image_url",
+                type: "input_image",
 
-                image_url: {
-                  url: imageUrl,
-                },
+                image_url: imageUrl,
               },
             ],
           },

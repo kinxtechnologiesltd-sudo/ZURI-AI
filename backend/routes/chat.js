@@ -1,11 +1,22 @@
 import express from "express";
 import multer from "multer";
+import crypto from "node:crypto";
 
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { adminAuth } from "../config/firebase.js";
 import { runZuri } from "../engine/zuriEngine.js";
+import {
+  getChatFileCategory,
+  getChatImageExtension,
+  getImageEditRequest,
+  MAX_CHAT_UPLOAD_BYTES,
+} from "../services/chatAttachments.js";
+import {
+  editUploadedImage,
+  validateUploadedImage,
+} from "../services/imageEditing.js";
 import { getMusicStatus } from "../services/musicGeneration.js";
 import { extractPdfText } from "../services/pdf.js";
 import { generatePdf } from "../services/pdfGeneration.js";
@@ -24,19 +35,10 @@ function wantsPdfDocument(message) {
   const text = String(message || "").toLowerCase();
 
   return (
-    text.includes("pdf") ||
+    (text.includes("pdf") &&
+      /\b(create|make|generate|export|convert|download|save|give me)\b/.test(text)) ||
     text.includes("downloadable document") ||
-    text.includes("download this") ||
-    text.includes("download it") ||
-    text.includes("save this as") ||
-    text.includes("save it as") ||
-    text.includes("export as pdf") ||
-    text.includes("export this as pdf") ||
-    text.includes("convert this to pdf") ||
-    text.includes("convert it to pdf") ||
-    text.includes("give me a pdf") ||
-    text.includes("create a pdf") ||
-    text.includes("make a pdf")
+    /\b(?:download|save)\s+(?:this|it)\s+as\s+(?:a\s+)?pdf\b/.test(text)
   );
 }
 function cleanPdfTitle(message) {
@@ -110,9 +112,58 @@ const upload = multer({
   storage: multer.memoryStorage(),
 
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10 MB
+    fileSize: MAX_CHAT_UPLOAD_BYTES,
   },
 });
+
+function handleChatUpload(req, res, next) {
+  upload.single("file")(req, res, (error) => {
+    if (error instanceof multer.MulterError) {
+      const statusCode =
+        error.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+      return res.status(statusCode).json({
+        success: false,
+        message:
+          error.code === "LIMIT_FILE_SIZE"
+            ? `File is larger than the ${Math.ceil(
+                MAX_CHAT_UPLOAD_BYTES / (1024 * 1024)
+              )} MB upload limit.`
+            : "The file upload could not be processed.",
+      });
+    }
+
+    if (error) return next(error);
+    return next();
+  });
+}
+
+async function createEditedImage(buffer, mimeType) {
+  const extension = getChatImageExtension(mimeType);
+
+  if (!extension) {
+    throw new Error("Unsupported image format.");
+  }
+
+  await ensureGeneratedDirectory();
+  const filename = `zuri-edited-${crypto.randomUUID()}.png`;
+  const storedFile = await saveGeneratedFile({
+    filename,
+    buffer,
+    title: "Edited image",
+  });
+  const token = createSecureDownloadToken({
+    filename: storedFile.filename,
+    filePath: storedFile.filePath,
+    provider: storedFile.provider,
+    bucket: storedFile.bucket,
+    objectKey: storedFile.objectKey,
+  });
+
+  return {
+    filename: storedFile.filename,
+    url: `/generated/${token}/${encodeURIComponent(storedFile.filename)}`,
+  };
+}
 
 /**
  * ===========================================
@@ -343,7 +394,9 @@ router.get(
         error
       );
 
-      return res.status(500).json({
+      return res.status(
+        Number.isInteger(error?.statusCode) ? error.statusCode : 500
+      ).json({
         success: false,
         message:
           error instanceof Error
@@ -356,7 +409,7 @@ router.get(
 router.post(
   "/",
   verifyFirebaseUser,
-  upload.single("file"),
+  handleChatUpload,
   async (req, res) => {
     try {
       /**
@@ -367,11 +420,6 @@ router.post(
 
       const userId =
         req.user?.uid;
-
-      console.log(
-        "🔐 Chat Firebase UID:",
-        userId
-      );
 
       if (!userId) {
         return res.status(401).json({
@@ -389,16 +437,6 @@ router.post(
 
       let message =
         String(req.body.message || "").trim();
-
-      console.log(
-        "🔎 TRACE CHAT ROUTE MESSAGE:",
-        message
-      );
-
-      console.log(
-        "📨 Backend received message:",
-        JSON.stringify(message)
-      );
 
       if (!message) {
         return res.status(400).json({
@@ -441,14 +479,17 @@ router.post(
       const file =
         req.file || null;
 
-      const hasImage =
-        file?.mimetype?.startsWith(
-          "image/"
-        ) || false;
-
-      const hasPdf =
-        file?.mimetype ===
-        "application/pdf";
+      const fileCategory = file
+        ? getChatFileCategory(file)
+        : null;
+      if (fileCategory) {
+        file.mimetype = fileCategory.mimeType;
+      }
+      const hasImage = fileCategory?.category === "image";
+      const hasPdf = fileCategory?.category === "pdf";
+      if (hasImage) {
+        await validateUploadedImage(file.buffer);
+      }
 
       /**
        * =========================================
@@ -528,7 +569,7 @@ router.post(
 
             content: [
               {
-                type: "text",
+                type: "input_text",
 
                 text:
                   message ||
@@ -536,12 +577,10 @@ router.post(
               },
 
               {
-                type: "image_url",
+                type: "input_image",
 
-                image_url: {
-                  url:
-                    `data:${file.mimetype};base64,${imageBase64}`,
-                },
+                image_url:
+                  `data:${file.mimetype};base64,${imageBase64}`,
               },
             ],
           },
@@ -553,10 +592,18 @@ router.post(
 // -----------------------------------------
 
 else if (hasPdf) {
-  console.log("📄 PDF uploaded:", file.originalname);
+  console.log("📄 PDF uploaded.");
 
-  const pdfData =
-    await extractPdfText(file.buffer);
+  let pdfData;
+  try {
+    pdfData = await extractPdfText(file.buffer);
+  } catch {
+    const error = new Error(
+      "The PDF is corrupted, encrypted, or could not be read."
+    );
+    error.statusCode = 422;
+    throw error;
+  }
 
   const fullText =
     pdfData?.fullText || "";
@@ -574,7 +621,6 @@ else if (hasPdf) {
     fullText.length;
 
   console.log("📄 PDF extraction complete:", {
-    fileName: file.originalname,
     pageCount,
     characterCount,
     pagesExtracted: pageTexts.length,
@@ -602,7 +648,7 @@ PDF ANALYSIS MODE
 You are analyzing an uploaded PDF.
 
 Document:
-${file.originalname}
+Uploaded PDF attachment
 
 Page count:
 ${pageCount || "Unknown"}
@@ -689,11 +735,6 @@ ${pageContent}
        */
 
       console.log(
-        "👤 Authenticated user:",
-        userId
-      );
-
-      console.log(
         "History received:",
         history.length
       );
@@ -711,11 +752,6 @@ ${pageContent}
       console.log(
         "Has PDF:",
         hasPdf
-      );
-
-      console.log(
-        "Messages sent to AI:",
-        messages
       );
 
       /**
@@ -751,8 +787,46 @@ Return ONLY the document content.
 `,
   });
 }
-      const response =
-        await runZuri({
+      let response;
+      const imageEditRequest = hasImage
+        ? getImageEditRequest(message)
+        : null;
+
+      if (imageEditRequest?.type === "unsupported") {
+        response = {
+          choices: [
+            {
+              message: {
+                content:
+                  "I can currently resize an image to explicit dimensions (up to 4096 × 4096) or crop it to a square. Other edits, including background removal and retouching, are not available yet.",
+              },
+            },
+          ],
+        };
+      } else if (imageEditRequest) {
+        const editedBuffer = await editUploadedImage(
+          file.buffer,
+          imageEditRequest
+        );
+        const editedFile = await createEditedImage(
+          editedBuffer,
+          file.mimetype
+        );
+        response = {
+          choices: [
+            {
+              message: {
+                content:
+                  imageEditRequest.type === "square-crop"
+                    ? "I cropped the image to a square. The original file was left unchanged."
+                    : `I resized the image to ${imageEditRequest.width} × ${imageEditRequest.height} pixels. The original file was left unchanged.`,
+              },
+            },
+          ],
+          imageUrl: `${req.protocol}://${req.get("host")}${editedFile.url}`,
+        };
+      } else {
+        response = await runZuri({
           message,
 
           userId,
@@ -769,6 +843,7 @@ Return ONLY the document content.
 
           preferences,
         });
+      }
 // =========================================
 // PDF DOCUMENT GENERATION
 // =========================================
@@ -845,13 +920,6 @@ if (pdfRequest) {
         "===== ZURI RAW RESPONSE ====="
       );
 
-      console.dir(
-        response,
-        {
-          depth: null,
-        }
-      );
-
       console.log(
         "============================="
       );
@@ -880,6 +948,10 @@ return res.json({
     response?.imageUrl ||
     null,
 
+  imageType:
+    response?.imageType ||
+    null,
+
   musicTaskId:
     response?.musicTaskId ||
     null,
@@ -905,6 +977,11 @@ return res.json({
     Array.isArray(response?.sources)
       ? response.sources
       : [],
+
+  researchVideos:
+    Array.isArray(response?.researchVideos)
+      ? response.researchVideos
+      : [],
 });
 
     } catch (error) {
@@ -913,13 +990,15 @@ return res.json({
         error
       );
 
-      return res.status(500).json({
+      return res.status(
+        Number.isInteger(error?.statusCode) ? error.statusCode : 500
+      ).json({
         success: false,
 
         message:
-          error instanceof Error
+          Number.isInteger(error?.statusCode) && error instanceof Error
             ? error.message
-            : "Internal server error.",
+            : "Unable to process the chat request.",
       });
     }
   }
