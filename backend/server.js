@@ -14,6 +14,8 @@ import imageRoutes from "./routes/image.js";
 import subscriptionRoutes from "./routes/subscription.js";
 import sunoRouter from "./routes/suno.js";
 import voiceRoutes from "./routes/voice.js";
+import reportRoutes from "./routes/report.js";
+import streamRoutes from "./routes/stream.js";
 
 import { generatePdf } from "./services/pdfGeneration.js";
 import {
@@ -326,6 +328,16 @@ app.use(
 app.use(
   "/conversation",
   conversationRoutes
+);
+
+app.use(
+  "/report",
+  reportRoutes
+);
+
+app.use(
+  "/stream",
+  streamRoutes
 );
 
 // ===========================================

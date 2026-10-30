@@ -744,7 +744,6 @@ const handleCopy = async () => {
         },
       ]}
     >
-            )}
 
       <View
         style={[
@@ -774,7 +773,7 @@ const handleCopy = async () => {
           {!isUser && (
             <View style={styles.aiBadge}>
               <Text style={styles.aiBadgeText}>
-                KINX AI
+                KYNX AI
               </Text>
             </View>
           )}
