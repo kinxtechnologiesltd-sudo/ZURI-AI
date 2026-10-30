@@ -4,8 +4,10 @@ import {
   useAudioPlayer,
   useAudioRecorder,
 } from "expo-audio";
+import * as DocumentPicker from "expo-document-picker";
 import ZuriLogo from "../asset/images/zuri-icon.png (2).png";
 import { useFocusEffect } from "expo-router";
+import { readSSEStream } from "../utils/sseReader";
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -23,6 +25,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 
+import GenerationProgressCard from "../components/chat/GenerationProgressCard";
 import MessageBubble from "../components/chat/MessageBubble";
 import RightPanel from "../components/layout/RightPanel";
 import Sidebar from "../components/layout/Sidebar";
@@ -48,10 +51,25 @@ import useUserPlan from "../hooks/useUserPlan";
 
 const API_BASE_URL =
   "https://zuri-ai-v1.onrender.com";
+const MAX_CHAT_UPLOAD_BYTES = 10 * 1024 * 1024;
+const CHAT_ATTACHMENT_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+];
 
 type Message = {
+  id?: string;
   text: string;
   sender: "user" | "ai";
+  attachment?: {
+    name: string;
+    uri: string;
+    mimeType?: string;
+    size?: number;
+  };
+  imageType?: string;
   imageUrl?: string;
   videoUrl?: string;
   audioUrl?: string;
@@ -61,6 +79,15 @@ type Message = {
     url: string;
     title?: string | null;
     sourceUrl?: string | null;
+    creator?: string | null;
+  }>;
+  researchVideos?: Array<{
+    id?: string;
+    title: string;
+    channel?: string | null;
+    source: string;
+    url: string;
+    thumbnailUrl?: string | null;
   }>;
   sources?: Array<{
     title?: string | null;
@@ -138,6 +165,10 @@ export default function Chat() {
   } = useConversation();
 
   const [input, setInput] = useState("");
+  const [selectedAttachment, setSelectedAttachment] =
+    useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [isPickingAttachment, setIsPickingAttachment] =
+    useState(false);
 
   const audioRecorder = useAudioRecorder(
     RecordingPresets.HIGH_QUALITY
@@ -194,6 +225,7 @@ const scrollViewRef =
   useRef<ScrollView>(null);
 
 const inputRef = useRef<TextInput>(null);
+const abortControllerRef = useRef<AbortController | null>(null);
 
   const { width } = useWindowDimensions();
 
@@ -358,11 +390,22 @@ const inputRef = useRef<TextInput>(null);
           uploadFilename
         );
 
+        const user = auth.currentUser;
+        if (!user) {
+          throw new Error(
+            "You must be logged in to transcribe a recording."
+          );
+        }
+        const idToken = await user.getIdToken();
+
         const transcriptionResponse =
           await fetch(
             `${API_BASE_URL}/voice/transcribe`,
             {
               method: "POST",
+              headers: {
+                Authorization: `Bearer ${idToken}`,
+              },
               body: formData,
             }
           );
@@ -392,13 +435,6 @@ const inputRef = useRef<TextInput>(null);
             data.message ||
               data.error ||
               "Voice transcription failed."
-          );
-        }
-
-        if (Platform.OS === "web") {
-          console.log(
-            "TRANSCRIPTION TEXT:",
-            data.text || ""
           );
         }
 
@@ -702,6 +738,7 @@ const response = await fetch(
 
         const formattedMessages =
           data.map((message) => ({
+            id: message.id,
             sender: message.sender,
             text: message.text,
             imageUrl:
@@ -719,6 +756,14 @@ const response = await fetch(
                 message.researchImages
               )
                 ? message.researchImages
+                : [],
+            researchVideos:
+              Array.isArray(message.researchVideos)
+                ? message.researchVideos
+                : [],
+            sources:
+              Array.isArray(message.sources)
+                ? message.sources
                 : [],
           }));
 
@@ -738,8 +783,69 @@ const response = await fetch(
     fetchMessages();
   }, [currentConversationId]);
 
+  const chooseChatAttachment = async () => {
+    setIsPickingAttachment(true);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: CHAT_ATTACHMENT_TYPES,
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (result.canceled) return;
+
+      const asset = result.assets[0];
+      const extension = asset.name.split(".").pop()?.toLowerCase();
+      const supportedExtension = [
+        "jpg",
+        "jpeg",
+        "png",
+        "webp",
+        "pdf",
+      ].includes(extension || "");
+
+      if (
+        (asset.mimeType &&
+          !CHAT_ATTACHMENT_TYPES.includes(asset.mimeType)) ||
+        (!asset.mimeType && !supportedExtension)
+      ) {
+        showChatAlert(
+          "Unsupported file",
+          "Attach a JPEG, PNG, WebP, or PDF file."
+        );
+        return;
+      }
+
+      if (
+        typeof asset.size === "number" &&
+        asset.size > MAX_CHAT_UPLOAD_BYTES
+      ) {
+        showChatAlert(
+          "File too large",
+          "Chat attachments must be 10 MB or smaller."
+        );
+        return;
+      }
+
+      setSelectedAttachment(asset);
+    } catch (error) {
+      console.error("Chat attachment picker failed:", error);
+      showChatAlert(
+        "Unable to select file",
+        "Please try choosing the file again."
+      );
+    } finally {
+      setIsPickingAttachment(false);
+    }
+  };
+
   const callAthena = async (
-    message: string
+    message: string,
+    attachment?: DocumentPicker.DocumentPickerAsset | null,
+    options?: {
+      onDelta?: (text: string) => void;
+      signal?: AbortSignal;
+    }
   ) => {
     const user = auth.currentUser;
 
@@ -758,17 +864,41 @@ const response = await fetch(
       );
     }
 
-    console.log(
-      "📨 Message going to backend:",
-      JSON.stringify(cleanMessage)
-    );
-
     const formData = new FormData();
 
     formData.append(
       "message",
       cleanMessage
     );
+
+    if (attachment) {
+      const fileBlob =
+        Platform.OS === "web" && attachment.file
+          ? attachment.file
+          : await fetch(attachment.uri).then((result) => {
+              if (!result.ok) {
+                throw new Error("Unable to read the selected file.");
+              }
+              return result.blob();
+            });
+      const extension = attachment.name.split(".").pop()?.toLowerCase();
+      const mimeType =
+        attachment.mimeType ||
+        (extension === "pdf"
+          ? "application/pdf"
+          : extension === "png"
+            ? "image/png"
+            : extension === "webp"
+              ? "image/webp"
+              : "image/jpeg");
+      const uploadBlob = new Blob([fileBlob], { type: mimeType });
+
+      if (uploadBlob.size > MAX_CHAT_UPLOAD_BYTES) {
+        throw new Error("Chat attachments must be 10 MB or smaller.");
+      }
+
+      formData.append("file", uploadBlob, attachment.name);
+    }
 
     const recentHistory =
       messages.slice(-2).map((msg) => ({
@@ -829,7 +959,9 @@ const response = await fetch(
       await user.getIdToken();
 
     const response = await fetch(
-      `${API_BASE_URL}/chat`,
+      !attachment
+        ? `${API_BASE_URL}/stream`
+        : `${API_BASE_URL}/chat`,
       {
         method: "POST",
         headers: {
@@ -837,25 +969,92 @@ const response = await fetch(
             `Bearer ${idToken}`,
         },
         body: formData,
+        signal: abortControllerRef.current?.signal,
       }
     );
 
-    const data =
-      await response.json();
-
     if (!response.ok) {
+      let errorData: any = null;
+
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = null;
+      }
+
       console.error(
         "Zuri backend error:",
-        data
+        errorData
       );
 
       throw new Error(
-        data.reply ||
+        errorData?.reply ||
+          errorData?.message ||
+          errorData?.error ||
           "Zuri request failed."
       );
     }
 
+    let data: any = {
+      reply: "",
+    };
+
+    if (!attachment) {
+      let accumulated = "";
+
+      await readSSEStream(
+        response,
+        (event) => {
+          if (event.data === "[DONE]") {
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(event.data);
+
+            if (parsed?.type === "media") {
+              data = {
+                ...data,
+                ...parsed,
+                reply: accumulated,
+              };
+              return;
+            }
+
+            if (typeof parsed?.delta === "string") {
+              accumulated += parsed.delta;
+
+              if (options?.onDelta) {
+                options.onDelta(accumulated);
+              }
+            }
+
+            if (parsed?.error?.message) {
+              throw new Error(parsed.error.message);
+            }
+          } catch (error) {
+            if (event.data !== "[DONE]") {
+              console.error(
+                "Malformed SSE event:",
+                event.data
+              );
+            }
+          }
+        }
+      );
+
+      data.reply = accumulated;
+    } else {
+      data = await response.json();
+    }
+
     return data;
+  };
+
+  const stopGeneration = () => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setLoading(false);
   };
 
   const generateImage = async (
@@ -1023,28 +1222,39 @@ const response = await fetch(
     voiceText?: string,
     shouldSpeak = false
   ) {
+    if (loading) return;
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     const prompt =
       voiceText || input;
+    const attachment = selectedAttachment;
 
-    if (!prompt.trim()) return;
+    if (!prompt.trim() && !attachment) return;
+
+    const requestPrompt =
+      prompt.trim() ||
+      `Please analyze the attached file "${attachment?.name}".`;
+
+    const useStreaming = !attachment;
+    const displayPrompt = attachment
+      ? `${requestPrompt}\n\nAttachment: ${attachment.name}`
+      : requestPrompt;
 
     console.log(
       "Conversation ID:",
       currentConversationId
     );
 
-    console.log(
-      "Prompt:",
-      prompt
-    );
-
     setInput("");
     setLoading(true);
 
     const lowerPrompt =
-      prompt.toLowerCase();
+      requestPrompt.toLowerCase();
 
     if (
+      !attachment &&
       /\b(generate|create|make|draw)\b[\s\S]{0,80}\b(image|picture|photo|artwork|illustration)\b/i.test(
         lowerPrompt
       )
@@ -1052,7 +1262,7 @@ const response = await fetch(
       setMediaGenerationType(
         "image"
       );
-    } else if (
+    } else if (!attachment &&
       /\b(generate|create|make|compose)\b[\s\S]{0,80}\b(music|song|beat|audio)\b/i.test(
         lowerPrompt
       )
@@ -1060,7 +1270,7 @@ const response = await fetch(
       setMediaGenerationType(
         "music"
       );
-    } else if (
+    } else if (!attachment &&
       /\b(generate|create|make|produce|render)\b[\s\S]{0,80}\b(video|movie|clip|animation)\b/i.test(
         lowerPrompt
       )
@@ -1078,9 +1288,27 @@ const response = await fetch(
       ...prev,
       {
         sender: "user",
-        text: prompt,
+        text: displayPrompt,
+        attachment: attachment
+          ? {
+              name: attachment.name,
+              uri: attachment.uri,
+              mimeType: attachment.mimeType,
+              size: attachment.size,
+            }
+          : undefined,
       },
     ]);
+
+    if (useStreaming) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "ai",
+          text: "",
+        },
+      ]);
+    }
 
     try {
       console.log(
@@ -1111,7 +1339,7 @@ const response = await fetch(
           await saveMessage(
             conversationId,
             "user",
-            prompt
+            displayPrompt
           );
 
           console.log(
@@ -1127,10 +1355,10 @@ const response = await fetch(
         try {
           await updateConversationTitle(
             conversationId,
-            prompt.length > 40
-              ? prompt.substring(0, 40) +
+            requestPrompt.length > 40
+              ? requestPrompt.substring(0, 40) +
                 "..."
-              : prompt
+              : requestPrompt
           );
 
           triggerConversationRefresh();
@@ -1143,8 +1371,9 @@ const response = await fetch(
       }
 
       const wantsImage =
+        !attachment &&
         /\b(generate|create|make|draw)\b[\s\S]{0,80}\b(image|picture|photo|artwork|illustration)\b/i.test(
-          prompt
+          requestPrompt
         );
 
       if (wantsImage) {
@@ -1152,14 +1381,9 @@ const response = await fetch(
           "🎨 Zuri image generation requested."
         );
 
-        console.log(
-          "🎨 Image prompt:",
-          prompt
-        );
-
         const result =
           await generateImage(
-            prompt
+            requestPrompt
           );
 
         console.log(
@@ -1187,16 +1411,28 @@ const response = await fetch(
             text: replyText,
             imageUrl:
               permanentImageUrl,
+            imageType:
+              "image",
           },
         ]);
 
         if (conversationId) {
-          await saveMessage(
+          const savedId = await saveMessage(
             conversationId,
             "ai",
             replyText,
             permanentImageUrl
           );
+          if (savedId) {
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last && last.sender === "ai") {
+                next[next.length - 1] = { ...last, id: savedId };
+              }
+              return next;
+            });
+          }
         }
 
         triggerConversationRefresh();
@@ -1207,11 +1443,33 @@ const response = await fetch(
 
       console.log(
         "🚀 CALLING ZURI BACKEND NOW:",
-        prompt
+        requestPrompt
       );
 
-      const data =
-        await callAthena(prompt);
+      const data = await callAthena(
+        requestPrompt,
+        attachment,
+        useStreaming
+          ? {
+              onDelta: (text: string) => {
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const last = next[next.length - 1];
+
+                  if (last && last.sender === "ai") {
+                    next[next.length - 1] = {
+                      ...last,
+                      text,
+                    };
+                  }
+
+                  return next;
+                });
+              },
+            }
+          : undefined
+      );
+      setSelectedAttachment(null);
 
       triggerConversationRefresh();
 
@@ -1276,7 +1534,11 @@ const response = await fetch(
         }
       }
 
-      setMessages((prev) => [
+      if (useStreaming) {
+      setMessages((prev) => prev.slice(0, -1));
+    }
+
+    setMessages((prev) => [
         ...prev,
         {
           sender: "ai",
@@ -1302,6 +1564,10 @@ const response = await fetch(
             )
               ? data.researchImages
               : [],
+          researchVideos:
+            Array.isArray(data.researchVideos)
+              ? data.researchVideos
+              : [],
           sources:
             Array.isArray(data.sources)
               ? data.sources
@@ -1310,7 +1576,7 @@ const response = await fetch(
       ]);
 
       if (conversationId) {
-        await saveMessage(
+        const savedId = await saveMessage(
           conversationId,
           "ai",
           finalReply,
@@ -1326,8 +1592,21 @@ const response = await fetch(
           data.videoUrl || undefined,
           audioUrl || data.audioUrl || undefined,
           data.pdfUrl || undefined,
-          data.pdfName || undefined
+          data.pdfName || undefined,
+          Array.isArray(data.researchVideos)
+            ? data.researchVideos
+            : []
         );
+        if (savedId) {
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last && last.sender === "ai") {
+              next[next.length - 1] = { ...last, id: savedId };
+            }
+            return next;
+          });
+        }
       }
 
       if (shouldSpeak) {
@@ -1434,6 +1713,9 @@ const response = await fetch(
                 key={index}
                 sender={message.sender}
                 text={message.text}
+                messageId={message.id}
+                conversationId={currentConversationId ?? undefined}
+                imageKind={message.imageType === "comic" ? "comic" : "image"}
                 imageUrl={
                   message.imageUrl
                 }
@@ -1453,7 +1735,17 @@ const response = await fetch(
                   message.researchImages ||
                   []
                 }
-              />
+                researchVideos={
+                  message.researchVideos ||
+                  []
+                }
+                sources={
+                  message.sources ||
+                  []
+                }
+                attachment={message.attachment} />
+
+
             )
           )}
 
@@ -1524,9 +1816,52 @@ const response = await fetch(
           </Text>
 
           {generationType && (
-            <GenerationStatus
-              type={generationType}
-            />
+            <GenerationProgressCard type={generationType} />
+          )}
+
+          {selectedAttachment && (
+            <View
+              style={[
+                styles.attachmentPreview,
+                isMobile && styles.mobileAttachmentPreview,
+              ]}
+            >
+              {selectedAttachment.mimeType?.startsWith("image/") ? (
+                <Image
+                  source={{ uri: selectedAttachment.uri }}
+                  style={styles.attachmentThumbnail}
+                />
+              ) : (
+                <Ionicons
+                  name="document-text-outline"
+                  size={28}
+                  color="#00D9E8"
+                />
+              )}
+              <View style={styles.attachmentDetails}>
+                <Text
+                  style={styles.attachmentName}
+                  numberOfLines={1}
+                >
+                  {selectedAttachment.name}
+                </Text>
+                <Text style={styles.attachmentSize}>
+                  {typeof selectedAttachment.size === "number"
+                    ? selectedAttachment.size >= 1024 * 1024
+                      ? `${(selectedAttachment.size / (1024 * 1024)).toFixed(1)} MB`
+                      : `${Math.max(1, Math.round(selectedAttachment.size / 1024))} KB`
+                    : "Ready to attach"}
+                </Text>
+              </View>
+              <TouchableOpacity
+                accessibilityLabel="Remove attachment"
+                onPress={() => setSelectedAttachment(null)}
+                style={styles.removeAttachmentButton}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={18} color="#E5E7EB" />
+              </TouchableOpacity>
+            </View>
           )}
 
           <View
@@ -1538,6 +1873,27 @@ const response = await fetch(
                 styles.smallPhoneInputContainer,
             ]}
           >
+            <TouchableOpacity
+              accessibilityLabel="Add image or PDF attachment"
+              style={[
+                styles.attachButton,
+                isMobile && styles.mobileAttachButton,
+              ]}
+              onPress={chooseChatAttachment}
+              disabled={loading || isPickingAttachment}
+              activeOpacity={0.75}
+            >
+              {isPickingAttachment ? (
+                <ActivityIndicator size="small" color="#00D9E8" />
+              ) : (
+                <Ionicons
+                  name="attach"
+                  size={isSmallPhone ? 20 : 23}
+                  color={loading ? "#526267" : "#00D9E8"}
+                />
+              )}
+            </TouchableOpacity>
+
             {/* TEXT INPUT */}
           <TextInput
   ref={inputRef}
@@ -1575,7 +1931,7 @@ const response = await fetch(
             />
 
             {/* SEND / MICROPHONE */}
-            {input.trim().length > 0 ? (
+            {input.trim().length > 0 || selectedAttachment ? (
               <TouchableOpacity
                 style={[
                   styles.sendButton,
@@ -1585,7 +1941,7 @@ const response = await fetch(
                     styles.smallPhoneActionButton,
                 ]}
                 onPress={() =>
-                  sendMessage()
+                  loading ? stopGeneration() : sendMessage()
                 }
                 activeOpacity={0.8}
                 hitSlop={{
@@ -1971,14 +2327,14 @@ const styles = StyleSheet.create({
   appContainer: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: "#081216",
+    backgroundColor: "#080B0E",
   },
 
   root: {
     flex: 1,
     height: "100%",
     minHeight: 0,
-    backgroundColor: "#081216",
+    backgroundColor: "#080B0E",
     paddingHorizontal: 12,
   },
 
@@ -2019,9 +2375,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     padding: 14,
     borderRadius: 16,
-    backgroundColor: "#171717",
+    backgroundColor: "#151F25",
     borderWidth: 1,
-    borderColor: "#2A2A2A",
+    borderColor: "#22343F",
   },
 
   generationHeader: {
@@ -2039,13 +2395,13 @@ const styles = StyleSheet.create({
   },
 
   generationTitle: {
-    color: "#FFFFFF",
+    color: "#F5F5F0",
     fontSize: 14,
     fontWeight: "700",
   },
 
   generationDescription: {
-    color: "#999999",
+    color: "#A7B3BA",
     fontSize: 12,
     marginTop: 3,
   },
@@ -2054,14 +2410,14 @@ const styles = StyleSheet.create({
     height: 4,
     marginTop: 12,
     borderRadius: 4,
-    backgroundColor: "#303030",
+    backgroundColor: "#22343F",
     overflow: "hidden",
   },
 
   generationProgress: {
     width: "65%",
     height: "100%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F5F5F0",
     borderRadius: 4,
   },
 
@@ -2082,7 +2438,7 @@ const styles = StyleSheet.create({
   },
 
   loadingText: {
-    color: "#19D3C5",
+    color: "#00D9E8",
     fontSize: 14,
     fontWeight: "600",
   },
@@ -2099,7 +2455,7 @@ const styles = StyleSheet.create({
 
   composerKeyboard: {
     width: "100%",
-    backgroundColor: "#081216",
+    backgroundColor: "#080B0E",
   },
 
   disclaimer: {
@@ -2117,15 +2473,69 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
 
+  attachmentPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    maxWidth: 420,
+    minWidth: 190,
+    marginHorizontal: 30,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: "#151F25",
+    borderWidth: 1,
+    borderColor: "#22343F",
+  },
+
+  mobileAttachmentPreview: {
+    maxWidth: "90%",
+    marginHorizontal: 8,
+  },
+
+  attachmentThumbnail: {
+    width: 38,
+    height: 38,
+    borderRadius: 7,
+    resizeMode: "cover",
+  },
+
+  attachmentDetails: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 9,
+  },
+
+  attachmentName: {
+    color: "#F3F4EF",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  attachmentSize: {
+    color: "#94A3A8",
+    fontSize: 10,
+    marginTop: 3,
+  },
+
+  removeAttachmentButton: {
+    width: 28,
+    height: 28,
+    marginLeft: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 30,
     paddingTop: 12,
     paddingBottom: 20,
-    backgroundColor: "#081216",
+    backgroundColor: "#080B0E",
     borderTopWidth: 1,
-    borderTopColor: "#172B30",
+    borderTopColor: "#22343F",
   },
 
   mobileInputContainer: {
@@ -2140,6 +2550,26 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 6,
   },
+
+  attachButton: {
+    width: 42,
+    height: 42,
+    marginRight: 8,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#151F25",
+    borderWidth: 1,
+    borderColor: "#22343F",
+  },
+
+  mobileAttachButton: {
+    width: 36,
+    height: 36,
+    marginRight: 5,
+    borderRadius: 18,
+  },
+
   smallPhoneActionButton: {
     width: 38,
     height: 38,
@@ -2154,10 +2584,10 @@ const styles = StyleSheet.create({
     minWidth: 0,
     minHeight: 52,
     maxHeight: 130,
-    backgroundColor: "#0C1B20",
+    backgroundColor: "#151F25",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#29464C",
+    borderColor: "#22343F",
     color: "#F3F4EF",
     fontSize: 15,
     paddingHorizontal: 18,
@@ -2194,10 +2624,10 @@ const styles = StyleSheet.create({
     minHeight: 44,
     flexShrink: 0,
     marginLeft: 10,
-    backgroundColor: "#18BEB3",
+    backgroundColor: "#FFC928",
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: "#4AD8CE",
+    borderColor: "#FFE477",
     justifyContent: "center",
     alignItems: "center",
     overflow: "visible",
@@ -2241,9 +2671,9 @@ smallPhoneSendButton: {
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: "#111827",
+    backgroundColor: "#151F25",
     borderWidth: 1,
-    borderColor: "#1E293B",
+    borderColor: "#22343F",
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 8,
@@ -2328,7 +2758,7 @@ smallPhoneSendButton: {
     width: 180,
     backgroundColor: "#0F172A",
     borderWidth: 1,
-    borderColor: "#1E293B",
+    borderColor: "#22343F",
     borderRadius: 16,
     padding: 8,
     zIndex: 1000,
@@ -2377,7 +2807,7 @@ smallPhoneSendButton: {
     left: 0,
     width: 310,
     maxWidth: "84%",
-    backgroundColor: "#081216",
+    backgroundColor: "#080B0E",
     borderRightWidth: 1,
     borderRightColor: "#1B3036",
     shadowColor: "#000000",
@@ -2404,7 +2834,7 @@ smallPhoneSendButton: {
     justifyContent: "space-between",
     borderBottomWidth: 1,
     borderBottomColor: "#182A30",
-    backgroundColor: "#081216",
+    backgroundColor: "#080B0E",
   },
 emptyZuri: {
   flex: 1,
@@ -2474,7 +2904,7 @@ smallPhoneEmptyZuriLogo: {
   },
 
   zuriPanelBadgeText: {
-    color: "#38D9CF",
+    color: "#00D9E8",
     fontSize: 9,
     fontWeight: "800",
     letterSpacing: 1.3,
@@ -2503,7 +2933,7 @@ smallPhoneEmptyZuriLogo: {
   },
 
   zuriPanelSubheadline: {
-    color: "#FFFFFF",
+    color: "#F5F5F0",
     fontSize: 18,
     lineHeight: 24,
     fontWeight: "800",
@@ -2520,7 +2950,7 @@ smallPhoneEmptyZuriLogo: {
   },
 
   zuriV2Small: {
-    color: "#38D9CF",
+    color: "#00D9E8",
     fontSize: 9,
     fontWeight: "800",
     letterSpacing: 1.5,
@@ -2554,7 +2984,7 @@ smallPhoneEmptyZuriLogo: {
     marginTop: 28,
     paddingLeft: 14,
     borderLeftWidth: 2,
-    borderLeftColor: "#38D9CF",
+    borderLeftColor: "#00D9E8",
   },
 
   zuriPanelQuoteText: {
@@ -2565,7 +2995,7 @@ smallPhoneEmptyZuriLogo: {
   },
 
   zuriPanelQuoteAccent: {
-    color: "#38D9CF",
+    color: "#00D9E8",
     fontSize: 11,
     lineHeight: 18,
     fontWeight: "900",

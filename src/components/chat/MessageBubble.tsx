@@ -1,4 +1,6 @@
 import {
+  AccessibilityInfo,
+  Animated,
   Image,
   Linking,
   ScrollView,
@@ -7,16 +9,27 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as Clipboard from "expo-clipboard";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { saveGeneratedImage } from "./generatedImageDownload";
+import ReportModal from "../report/ReportModal";
 
 type ResearchImage = {
   url: string;
   title?: string | null;
   sourceUrl?: string | null;
+  creator?: string | null;
+};
+
+type ResearchVideo = {
+  id?: string;
+  title: string;
+  channel?: string | null;
+  source: string;
+  url: string;
+  thumbnailUrl?: string | null;
 };
 
 type SourceLink = {
@@ -37,8 +50,19 @@ type MessageBubbleProps = {
   pdfUrl?: string;
   pdfName?: string;
 
+  attachment?: {
+    name: string;
+    uri: string;
+    mimeType?: string;
+    size?: number;
+  };
+
   researchImages?: ResearchImage[];
+  researchVideos?: ResearchVideo[];
   sources?: SourceLink[];
+  messageId?: string;
+  conversationId?: string;
+  imageKind?: "image" | "comic";
 };
 
 type MarkdownPart = {
@@ -48,6 +72,56 @@ type MarkdownPart = {
   code?: boolean;
   link?: string;
 };
+
+function splitPlainUrls(text: string): MarkdownPart[] {
+  const parts: MarkdownPart[] = [];
+  const regex = /(https?:\/\/[^\s<]+)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({
+        text: text.slice(lastIndex, match.index),
+      });
+    }
+
+    let url = match[0];
+    const trailingMatch = url.match(/[.,;:!?)]+$/);
+    const trailing = trailingMatch ? trailingMatch[0] : "";
+    if (trailing) {
+      url = url.slice(0, -trailing.length);
+    }
+
+    if (url) {
+      parts.push({
+        text: url,
+        link: url,
+      });
+    }
+
+    if (trailing) {
+      parts.push({
+        text: trailing,
+      });
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push({
+      text: text.slice(lastIndex),
+    });
+  }
+
+  if (parts.length === 0) {
+    return [{ text }];
+  }
+
+  return parts;
+}
+
 
 function parseInlineMarkdown(
   input: string
@@ -62,9 +136,11 @@ function parseInlineMarkdown(
 
   while ((match = regex.exec(input)) !== null) {
     if (match.index > lastIndex) {
-      parts.push({
-        text: input.slice(lastIndex, match.index),
-      });
+      parts.push(
+        ...splitPlainUrls(
+          input.slice(lastIndex, match.index)
+        )
+      );
     }
 
     if (match[2] || match[3]) {
@@ -93,9 +169,11 @@ function parseInlineMarkdown(
   }
 
   if (lastIndex < input.length) {
-    parts.push({
-      text: input.slice(lastIndex),
-    });
+    parts.push(
+      ...splitPlainUrls(
+        input.slice(lastIndex)
+      )
+    );
   }
 
   if (parts.length === 0) {
@@ -566,11 +644,61 @@ export default function MessageBubble({
   audioUrl,
   pdfUrl,
   pdfName,
+  attachment,
   researchImages = [],
+  researchVideos = [],
   sources = [],
+  messageId,
+  conversationId,
 }: MessageBubbleProps) {
   const isUser = sender === "user";
+
+  const entranceOpacity = useRef(new Animated.Value(0)).current;
+  const entranceTranslate = useRef(new Animated.Value(8)).current;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((reduceMotion) => {
+        if (cancelled) return;
+
+        if (reduceMotion) {
+          entranceOpacity.setValue(1);
+          entranceTranslate.setValue(0);
+          return;
+        }
+
+        Animated.parallel([
+          Animated.timing(entranceOpacity, {
+            toValue: 1,
+            duration: 220,
+            useNativeDriver: true,
+          }),
+          Animated.timing(entranceTranslate, {
+            toValue: 0,
+            duration: 220,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      })
+      .catch(() => {
+        if (cancelled) return;
+        entranceOpacity.setValue(1);
+        entranceTranslate.setValue(0);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [entranceOpacity, entranceTranslate]);
 const [copied, setCopied] = useState(false);
+const [reportOpen, setReportOpen] = useState(false);
+const [reportContext, setReportContext] = useState<null | {
+  contentType: "text" | "image" | "comic" | "video" | "music";
+  contentUrl?: string | null;
+  contentSnippet?: string | null;
+}>(null);
 
 const handleCopy = async () => {
   try {
@@ -606,25 +734,17 @@ const handleCopy = async () => {
       : "";
 
   return (
-    <View
+    <Animated.View
       style={[
         styles.container,
-        isUser
-          ? styles.userContainer
-          : styles.aiContainer,
+        isUser ? styles.userContainer : styles.aiContainer,
+        {
+          opacity: entranceOpacity,
+          transform: [{ translateY: entranceTranslate }],
+        },
       ]}
     >
-      {!isUser && (
-        <View style={styles.aiAvatarOuter}>
-          <View style={styles.aiAvatar}>
-            <Text style={styles.aiAvatarText}>
-              Z
-            </Text>
-          </View>
-
-          <View style={styles.onlineDot} />
-        </View>
-      )}
+            )}
 
       <View
         style={[
@@ -674,15 +794,35 @@ const handleCopy = async () => {
     </View>
 
     {!isUser && (
-      <TouchableOpacity
-        style={styles.copyButton}
-        activeOpacity={0.7}
-        onPress={handleCopy}
-      >
-        <Text style={styles.copyButtonText}>
-          {copied ? "✓ Copied" : "⧉ Copy"}
-        </Text>
-      </TouchableOpacity>
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          style={styles.copyButton}
+          activeOpacity={0.7}
+          onPress={handleCopy}
+        >
+          <Text style={styles.copyButtonText}>
+            {copied ? "? Copied" : "? Copy"}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.reportButton}
+          activeOpacity={0.7}
+          onPress={() => {
+            setReportContext({
+              contentType: "text",
+              contentSnippet: text.slice(0, 500),
+            });
+            setReportOpen(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Report this message"
+        >
+          <Text style={styles.reportButtonText}>
+            Report
+          </Text>
+        </TouchableOpacity>
+      </View>
     )}
   </>
 )}
@@ -721,7 +861,9 @@ const handleCopy = async () => {
         )}
 
         {!isUser &&
-          (sources.length > 0 || researchImages.length > 0) && (
+          (sources.length > 0 ||
+            researchImages.length > 0 ||
+            researchVideos.length > 0) && (
             <View style={styles.researchGallery}>
               <View style={styles.researchHeader}>
                 <View
@@ -749,7 +891,8 @@ const handleCopy = async () => {
                 >
                   {Math.max(
                     sources.length,
-                    researchImages.length
+                    researchImages.length,
+                    researchVideos.length
                   )}
                 </Text>
               </View>
@@ -784,15 +927,7 @@ const handleCopy = async () => {
               )}
 
               {researchImages.length > 0 && (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={
-                    false
-                  }
-                  contentContainerStyle={
-                    styles.researchScrollContent
-                  }
-                >
+                <View style={styles.researchImageGrid}>
                   {researchImages.map(
                     (item, index) => (
                       <View
@@ -869,10 +1004,77 @@ const handleCopy = async () => {
                       </View>
                     )
                   )}
-                </ScrollView>
+                </View>
+              )}
+
+              {researchVideos.length > 0 && (
+                <View style={styles.sourcesList}>
+                  {researchVideos.map((video, index) => (
+                    <TouchableOpacity
+                      key={`${video.url}-${index}`}
+                      style={styles.sourceRow}
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        if (video.url) {
+                          void Linking.openURL(video.url);
+                        }
+                      }}
+                    >
+                      <Text style={styles.sourceIndex}>
+                        {index + 1}
+                      </Text>
+                      <View style={styles.sourceTextWrap}>
+                        <Text style={styles.sourceTitle} numberOfLines={2}>
+                          {video.title}
+                        </Text>
+                        {!!video.channel && (
+                          <Text style={styles.sourceExcerpt} numberOfLines={1}>
+                            {video.channel} · {video.source}
+                          </Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               )}
             </View>
           )}
+
+        {attachment && (
+          <View style={styles.attachmentCard}>
+            {attachment.mimeType?.startsWith("image/") ? (
+              <Image
+                source={{ uri: attachment.uri }}
+                style={styles.attachmentImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.attachmentIconBox}>
+                <Text style={styles.attachmentIconText}>
+                  {attachment.mimeType?.includes("pdf")
+                    ? "PDF"
+                    : attachment.mimeType?.startsWith("video/")
+                    ? "▶"
+                    : attachment.mimeType?.startsWith("audio/")
+                    ? "♪"
+                    : "FILE"}
+                </Text>
+              </View>
+            )}
+            <View style={styles.attachmentMeta}>
+              <Text style={styles.attachmentName} numberOfLines={1}>
+                {attachment.name}
+              </Text>
+              {typeof attachment.size === "number" ? (
+                <Text style={styles.attachmentSize}>
+                  {attachment.size >= 1024 * 1024
+                    ? `${(attachment.size / (1024 * 1024)).toFixed(1)} MB`
+                    : `${Math.max(1, Math.round(attachment.size / 1024))} KB`}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        )}
 
         {!!safeImageUrl && (
           <View style={styles.imageContainer}>
@@ -925,18 +1127,20 @@ const handleCopy = async () => {
         )}
       </View>
 
-      {isUser && (
-        <View style={styles.userAvatarOuter}>
-          <View style={styles.userAvatar}>
-            <Text
-              style={styles.userAvatarText}
-            >
-              J
-            </Text>
-          </View>
-        </View>
-      )}
-    </View>
+            <ReportModal
+        visible={reportOpen}
+        contentType={reportContext?.contentType || "text"}
+        contentId={messageId || null}
+        messageId={messageId || null}
+        conversationId={conversationId || null}
+        contentUrl={reportContext?.contentUrl || null}
+        contentSnippet={reportContext?.contentSnippet || null}
+        onClose={() => {
+          setReportOpen(false);
+          setReportContext(null);
+        }}
+      />
+    </Animated.View>
   );
 }
 
@@ -945,7 +1149,7 @@ const styles = StyleSheet.create({
     width: "100%",
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 26,
+    marginBottom: 20,
   },
 
   userContainer: {
@@ -962,7 +1166,7 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#8A6C36",
+    borderColor: "#5D4C2D",
     justifyContent: "center",
     alignItems: "center",
     marginHorizontal: 10,
@@ -972,13 +1176,13 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 11,
-    backgroundColor: "#102B31",
+    backgroundColor: "#151F25",
     justifyContent: "center",
     alignItems: "center",
   },
 
   aiAvatarText: {
-    color: "#E3B75E",
+    color: "#FFC928",
     fontSize: 18,
     fontWeight: "900",
   },
@@ -988,11 +1192,21 @@ const styles = StyleSheet.create({
     width: 9,
     height: 9,
     borderRadius: 5,
-    backgroundColor: "#19D3C5",
+    backgroundColor: "#00D9E8",
     right: -2,
     bottom: 3,
     borderWidth: 2,
-    borderColor: "#081216",
+    borderColor: "#080B0E",
+  },
+
+  aiLabelRow: {
+    marginBottom: 4,
+  },
+
+  aiLabel: {
+    color: "#FFC928",
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   userAvatarOuter: {
@@ -1010,7 +1224,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: "#12343A",
+    backgroundColor: "#1B2830",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1022,7 +1236,7 @@ const styles = StyleSheet.create({
   },
 
   messageWrapper: {
-    maxWidth: "75%",
+    maxWidth: "82%",
   },
 
   userMessageWrapper: {
@@ -1054,7 +1268,7 @@ const styles = StyleSheet.create({
   },
 
   zuriSender: {
-    color: "#D7AD5A",
+    color: "#FFC928",
   },
 
   aiBadge: {
@@ -1062,13 +1276,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: 10,
-    backgroundColor: "#102A2E",
+    backgroundColor: "#151F25",
     borderWidth: 1,
-    borderColor: "#25474B",
+    borderColor: "#22343F",
   },
 
   aiBadgeText: {
-    color: "#19C8BC",
+    color: "#00D9E8",
     fontSize: 6,
     fontWeight: "900",
     letterSpacing: 1,
@@ -1081,16 +1295,16 @@ const styles = StyleSheet.create({
   },
 
   userBubble: {
-    backgroundColor: "#12383D",
+    backgroundColor: "#17323A",
     borderWidth: 1,
-    borderColor: "#28555A",
+    borderColor: "#2E5A62",
     borderTopRightRadius: 6,
   },
 
   aiBubble: {
-    backgroundColor: "#0C1B20",
+    backgroundColor: "#121A21",
     borderWidth: 1,
-    borderColor: "#1C363B",
+    borderColor: "#22343F",
     borderTopLeftRadius: 6,
   },
 
@@ -1138,7 +1352,7 @@ const styles = StyleSheet.create({
   },
 
   userMarkdownHeading: {
-    color: "#FFFFFF",
+    color: "#F5F5F0",
   },
 
   markdownBold: {
@@ -1157,7 +1371,7 @@ const styles = StyleSheet.create({
   inlineCode: {
     fontFamily: "monospace",
     backgroundColor: "#10282D",
-    color: "#D7AD5A",
+    color: "#FFC928",
     paddingHorizontal: 4,
     borderRadius: 4,
   },
@@ -1187,7 +1401,7 @@ const styles = StyleSheet.create({
 
   bullet: {
     width: 20,
-    color: "#D7AD5A",
+    color: "#FFC928",
     fontSize: 17,
     lineHeight: 23,
     fontWeight: "800",
@@ -1195,7 +1409,7 @@ const styles = StyleSheet.create({
 
   numberBullet: {
     width: 25,
-    color: "#D7AD5A",
+    color: "#FFC928",
     fontSize: 14,
     lineHeight: 24,
     fontWeight: "800",
@@ -1211,7 +1425,7 @@ const styles = StyleSheet.create({
     marginVertical: 7,
     paddingLeft: 12,
     borderLeftWidth: 3,
-    borderLeftColor: "#D7AD5A",
+    borderLeftColor: "#FFC928",
   },
 
   quoteText: {
@@ -1229,7 +1443,7 @@ const styles = StyleSheet.create({
   pdfDownloadButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0C1B20",
+    backgroundColor: "#121A21",
     borderWidth: 1,
     borderColor: "#28474D",
     borderRadius: 14,
@@ -1261,7 +1475,7 @@ const styles = StyleSheet.create({
   },
 
   pdfDownloadText: {
-    color: "#18BEB3",
+    color: "#00D9E8",
     fontSize: 12,
     fontWeight: "800",
   },
@@ -1303,7 +1517,7 @@ copyButton: {
 },
 
 copyButtonText: {
-  color: "#19C8BC",
+  color: "#00D9E8",
   fontSize: 11,
   fontWeight: "700",
 },
@@ -1311,7 +1525,7 @@ copyButtonText: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#D7AD5A",
+    backgroundColor: "#FFC928",
     marginRight: 7,
   },
 
@@ -1327,24 +1541,25 @@ copyButtonText: {
     height: 22,
     paddingHorizontal: 6,
     borderRadius: 11,
-    backgroundColor: "#102A2E",
+    backgroundColor: "#151F25",
     borderWidth: 1,
     borderColor: "#29494D",
-    color: "#19C8BC",
+    color: "#00D9E8",
     fontSize: 10,
     fontWeight: "800",
     textAlign: "center",
     lineHeight: 20,
   },
 
-  researchScrollContent: {
-    paddingRight: 8,
+  researchImageGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
   },
 
   researchCard: {
-    width: 168,
-    marginRight: 10,
-    backgroundColor: "#0D2025",
+    width: "48%",
+    backgroundColor: "#10171C",
     borderRadius: 15,
     borderWidth: 1,
     borderColor: "#294348",
@@ -1354,7 +1569,7 @@ copyButtonText: {
   researchImage: {
     width: 168,
     height: 145,
-    backgroundColor: "#102B31",
+    backgroundColor: "#151F25",
   },
 
   imageOverlay: {
@@ -1392,7 +1607,7 @@ copyButtonText: {
   },
 
   sourceButtonText: {
-    color: "#19C8BC",
+    color: "#00D9E8",
     fontSize: 9,
     fontWeight: "800",
   },
@@ -1411,7 +1626,7 @@ copyButtonText: {
   generatedImage: {
     width: "100%",
     height: 420,
-    backgroundColor: "#0D2025",
+    backgroundColor: "#10171C",
   },
 
   imageLabel: {
@@ -1425,7 +1640,7 @@ copyButtonText: {
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: "#D7AD5A",
+    backgroundColor: "#FFC928",
     marginRight: 7,
   },
 
@@ -1441,7 +1656,7 @@ copyButtonText: {
     marginBottom: 10,
     paddingVertical: 11,
     borderRadius: 12,
-    backgroundColor: "#12383D",
+    backgroundColor: "#17323A",
     borderWidth: 1,
     borderColor: "#31565B",
     justifyContent: "center",
@@ -1455,8 +1670,8 @@ copyButtonText: {
   },
 
   videoContainer: {
-    width: 520,
-    maxWidth: "100%",
+    width: "100%",
+     maxWidth: 520,
     marginTop: 11,
     padding: 10,
     backgroundColor: "#0B191E",
@@ -1484,7 +1699,7 @@ copyButtonText: {
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: "#D4A72C",
+    backgroundColor: "#FFC928",
     marginRight: 7,
   },
 
@@ -1496,8 +1711,8 @@ copyButtonText: {
   },
 
   audioContainer: {
-    width: 520,
-    maxWidth: "100%",
+    width: "100%",
+     maxWidth: 520,
     marginTop: 11,
     padding: 16,
     backgroundColor: "#0B191E",
@@ -1516,16 +1731,16 @@ copyButtonText: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#102B31",
+    backgroundColor: "#151F25",
     borderWidth: 1,
-    borderColor: "#8A6C36",
+    borderColor: "#5D4C2D",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
   },
 
   audioIconText: {
-    color: "#D7AD5A",
+    color: "#FFC928",
     fontSize: 25,
     fontWeight: "900",
   },
@@ -1535,7 +1750,7 @@ copyButtonText: {
   },
 
   audioTitle: {
-    color: "#D7AD5A",
+    color: "#FFC928",
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1.5,
@@ -1557,7 +1772,7 @@ copyButtonText: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#18BEB3",
+    backgroundColor: "#00D9E8",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 10,
@@ -1573,13 +1788,13 @@ copyButtonText: {
     flex: 1,
     height: 5,
     borderRadius: 3,
-    backgroundColor: "#1B3439",
+    backgroundColor: "#22343F",
     overflow: "hidden",
   },
 
   audioTrackProgress: {
     height: "100%",
-    backgroundColor: "#19D3C5",
+    backgroundColor: "#00D9E8",
   },
 
   audioTime: {
@@ -1600,7 +1815,7 @@ copyButtonText: {
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: "#19C8BC",
+    backgroundColor: "#00D9E8",
     marginRight: 7,
   },
 
@@ -1610,4 +1825,122 @@ copyButtonText: {
     fontWeight: "900",
     letterSpacing: 1.2,
   },
-});
+
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 7,
+    flexWrap: "wrap",
+  },
+
+  reportButton: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 9,
+    backgroundColor: "#2A1A1A",
+    borderWidth: 1,
+    borderColor: "#5C3A3A",
+  },
+
+  reportButtonText: {
+    color: "#E07A7A",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  sourcesList: {
+    marginTop: 8,
+    gap: 6,
+  },
+
+  sourceRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "#10171C",
+    borderWidth: 1,
+    borderColor: "#22343F",
+    gap: 8,
+  },
+
+  sourceIndex: {
+    width: 24,
+    color: "#FFC928",
+    fontSize: 10,
+    fontWeight: "800",
+    marginTop: 1,
+  },
+
+  sourceTextWrap: {
+    flex: 1,
+    flexDirection: "column",
+  },
+
+  sourceTitle: {
+    color: "#DCE7E8",
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 16,
+  },
+
+  sourceExcerpt: {
+    color: "#8EA1A3",
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 2,
+  },
+
+  attachmentCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+    padding: 10,
+    borderRadius: 14,
+    backgroundColor: "#151F25",
+    borderWidth: 1,
+    borderColor: "#22343F",
+    gap: 10,
+  },
+
+  attachmentImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+  },
+
+  attachmentIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: "#0A1418",
+    borderWidth: 1,
+    borderColor: "#22343F",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  attachmentIconText: {
+    color: "#FFC928",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+
+  attachmentMeta: {
+    flex: 1,
+  },
+
+  attachmentName: {
+    color: "#F5F5F0",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  attachmentSize: {
+    color: "#A7B3BA",
+    fontSize: 11,
+    marginTop: 2,
+  },});
