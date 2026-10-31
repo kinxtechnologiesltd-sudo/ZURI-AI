@@ -1,9 +1,15 @@
 import { executeTool } from "../services/tools/executeTool.js";
-import {
-  formatAfricanKnowledgeContext,
-  formatAfricanKnowledgeEvidenceGap,
-  retrieveAfricanKnowledge,
-} from "../services/africanKnowledge.js";
+let formatAfricanKnowledgeContext = () => null;
+let formatAfricanKnowledgeEvidenceGap = () => null;
+let retrieveAfricanKnowledge = () => ({ sources: [] });
+try {
+  const _ak = await import("../services/africanKnowledge.js");
+  if (typeof _ak.formatAfricanKnowledgeContext === "function") formatAfricanKnowledgeContext = _ak.formatAfricanKnowledgeContext;
+  if (typeof _ak.formatAfricanKnowledgeEvidenceGap === "function") formatAfricanKnowledgeEvidenceGap = _ak.formatAfricanKnowledgeEvidenceGap;
+  if (typeof _ak.retrieveAfricanKnowledge === "function") retrieveAfricanKnowledge = _ak.retrieveAfricanKnowledge;
+} catch (e) {
+  console.warn("africanKnowledge module unavailable:", e?.message);
+}
 import { detectAfricanContext } from "./africanContext.js";
 import { think } from "./brainRouter.js";
 import { dispatch } from "./dispatcher.js";
