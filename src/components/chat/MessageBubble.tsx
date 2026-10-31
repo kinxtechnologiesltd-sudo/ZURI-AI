@@ -744,7 +744,6 @@ const handleCopy = async () => {
         },
       ]}
     >
-
       <View
         style={[
           styles.messageWrapper,

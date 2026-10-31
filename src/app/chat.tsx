@@ -958,10 +958,19 @@ const response = await fetch(
     const idToken =
       await user.getIdToken();
 
-    const response = await fetch(
+    const requestUrl =
       !attachment
         ? `${API_BASE_URL}/stream`
-        : `${API_BASE_URL}/chat`,
+        : `${API_BASE_URL}/chat`;
+
+    console.log("Zuri chat request:", {
+      method: "POST",
+      url: requestUrl,
+      hasAttachment: Boolean(attachment),
+    });
+
+    const response = await fetch(
+      requestUrl,
       {
         method: "POST",
         headers: {
@@ -972,6 +981,8 @@ const response = await fetch(
         signal: abortControllerRef.current?.signal,
       }
     );
+
+    console.log("Zuri chat response status:", response.status);
 
     if (!response.ok) {
       let errorData: any = null;
@@ -1012,6 +1023,14 @@ const response = await fetch(
           try {
             const parsed = JSON.parse(event.data);
 
+             if (event.event === "error") {
+               throw new Error(
+                 parsed?.message ||
+                   parsed?.error?.message ||
+                   "Zuri request failed."
+               );
+             }
+
             if (parsed?.type === "media") {
               data = {
                 ...data,
@@ -1021,8 +1040,13 @@ const response = await fetch(
               return;
             }
 
-            if (typeof parsed?.delta === "string") {
-              accumulated += parsed.delta;
+            const delta =
+              parsed?.choices?.[0]?.delta?.content ||
+              parsed?.delta ||
+              "";
+
+            if (typeof delta === "string" && delta.length > 0) {
+              accumulated += delta;
 
               if (options?.onDelta) {
                 options.onDelta(accumulated);

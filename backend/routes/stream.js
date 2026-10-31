@@ -254,9 +254,17 @@ ${pdfText}
         typeof result.getReader !==
           "function"
       ) {
-        throw new Error(
-          "Zuri stream returned an invalid response."
-        );
+        console.log("Zuri stream returned non-stream result:", typeof result, result ? Object.keys(result) : null, "asyncIterator:", result ? typeof result[Symbol.asyncIterator] : null);
+        const textContent = result?.choices?.[0]?.message?.content || result?.reply || result?.message || "";
+        if (textContent) {
+          res.write("data:" + JSON.stringify({ delta: textContent }) + "\n\n");
+        }
+        if (result?.imageUrl || result?.videoUrl || result?.audioUrl || result?.musicTaskId) {
+          res.write("data:" + JSON.stringify({ type: "media", choices: result.choices || [], imageUrl: result.imageUrl || null, videoUrl: result.videoUrl || null, audioUrl: result.audioUrl || null, musicTaskId: result.musicTaskId || null, researchImages: result.researchImages || [] }) + "\n\n");
+        }
+        res.write("data:[DONE]\n\n");
+        res.end();
+        return;
       }
 
       const reader =
