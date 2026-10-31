@@ -249,24 +249,63 @@ ${pdfText}
       // NORMAL TEXT STREAM
       // -----------------------------------------
 
-      if (
-        !result ||
-        typeof result.getReader !==
-          "function"
-      ) {
-        console.log("Zuri stream returned non-stream result:", typeof result, result ? Object.keys(result) : null, "asyncIterator:", result ? typeof result[Symbol.asyncIterator] : null);
-        const textContent = result?.choices?.[0]?.message?.content || result?.reply || result?.message || "";
-        if (textContent) {
-          res.write("data:" + JSON.stringify({ delta: textContent }) + "\n\n");
+      // -----------------------------------------
+      // ASYNC ITERABLE (OpenAI SDK stream)
+      // -----------------------------------------
+      if (result && typeof result[Symbol.asyncIterator] === "function") {
+        try {
+          for await (const event of result) {
+            if (event?.type === "response.output_text.delta" && typeof event.delta === "string" && event.delta.length > 0) {
+              res.write("data:" + JSON.stringify({ delta: event.delta }) + "\n\n");
+            } else if (event?.type === "response.completed") {
+              res.write("data:[DONE]\n\n");
+            } else if (event?.type === "error") {
+              res.write("event:error\ndata:" + JSON.stringify({ message: event?.message || event?.error?.message || "Streaming failed." }) + "\n\n");
+              res.end();
+              return;
+            }
+          }
+          res.write("data:[DONE]\n\n");
+          res.end();
+          return;
+        } catch (streamError) {
+          console.error("OpenAI async stream error:", streamError);
+          res.write("event:error\ndata:" + JSON.stringify({ message: streamError instanceof Error ? streamError.message : "Streaming failed." }) + "\n\n");
+          res.end();
+          return;
         }
-        if (result?.imageUrl || result?.videoUrl || result?.audioUrl || result?.musicTaskId) {
-          res.write("data:" + JSON.stringify({ type: "media", choices: result.choices || [], imageUrl: result.imageUrl || null, videoUrl: result.videoUrl || null, audioUrl: result.audioUrl || null, musicTaskId: result.musicTaskId || null, researchImages: result.researchImages || [] }) + "\n\n");
+      }
+
+      // -----------------------------------------
+      // WEB / NODE READABLE STREAM
+      // -----------------------------------------
+      if (result && typeof result.getReader === "function") {
+        const reader = result.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value);
+          res.write(chunk);
         }
-        res.write("data:[DONE]\n\n");
         res.end();
         return;
       }
 
+      // -----------------------------------------
+      // NON-STREAM RESPONSE OBJECT
+      // -----------------------------------------
+      console.log("Zuri stream returned non-stream result:", typeof result, result ? Object.keys(result) : null);
+      const textContent = result?.choices?.[0]?.message?.content || result?.reply || result?.message || "";
+      if (textContent) {
+        res.write("data:" + JSON.stringify({ delta: textContent }) + "\n\n");
+      }
+      if (result?.imageUrl || result?.videoUrl || result?.audioUrl || result?.musicTaskId) {
+        res.write("data:" + JSON.stringify({ type: "media", choices: result.choices || [], imageUrl: result.imageUrl || null, videoUrl: result.videoUrl || null, audioUrl: result.audioUrl || null, musicTaskId: result.musicTaskId || null, researchImages: result.researchImages || [] }) + "\n\n");
+      }
+      res.write("data:[DONE]\n\n");
+      res.end();
+      return;
       const reader =
         result.getReader();
 
