@@ -18,11 +18,29 @@ import { retrieveRelevantMemories } from "./memoryEngine.js";
 import { selectModel } from "./modelRouter.js";
 import { createPlan } from "./planner.js";
 import { buildSystemPrompt } from "./promptBuilder.js";
-import { decideResearch } from "../services/researchDecision.js";
-import {
-  buildResearchContext,
-  getResearchSources,
-} from "../services/researchContext.js";
+let decideResearch = (...args) => ({ shouldResearch: false, query: "", tool: null });
+
+try {
+  const _rd = await import("../services/researchDecision.js");
+
+  if (typeof _rd.decideResearch === "function") {
+    decideResearch = _rd.decideResearch;
+  } else if (typeof _rd.default === "function") {
+    decideResearch = _rd.default;
+  }
+} catch (e) {
+  console.warn("researchDecision module unavailable:", e?.message);
+}
+let buildResearchContext = (x) => ({});
+let getResearchSources = () => [];
+
+try {
+  const _rc = await import("../services/researchContext.js");
+  if (typeof _rc.buildResearchContext === "function") buildResearchContext = _rc.buildResearchContext;
+  if (typeof _rc.getResearchSources === "function") getResearchSources = _rc.getResearchSources;
+} catch (e) {
+  console.warn("researchContext module unavailable:", e?.message);
+}
 
 /**
  * =====================================================
